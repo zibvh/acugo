@@ -450,7 +450,7 @@
     footer { background: #030F1E; padding: 40px 5vw 24px; margin-top: 40px; border-top: 1px solid var(--border); }
     .footer-bottom { text-align: center; font-size: 0.75rem; color: var(--muted); }
     @keyframes fadeUp { from { opacity: 0; transform: translateY(12px); } to { opacity: 1; transform: translateY(0); } }
-    .signup-container { position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; background: rgba(6,26,48,0.92); backdrop-filter: blur(18px); z-index: 9999; display: none; justify-content: center; align-items: center; flex-direction: column; padding: 20px; gap: 30px; overflow-y: auto; }
+    .signup-container { position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; background: rgba(6,26,48,0.92); backdrop-filter: blur(18px); z-index: 10003; display: none; justify-content: center; align-items: center; flex-direction: column; padding: 20px; gap: 30px; overflow-y: auto; }
     .signup-container.show-modal { display: flex; }
     .signup { width: 100%; max-width: 440px; margin: 0 auto; }
     .signup form, .login form { display: flex; flex-direction: column; gap: 16px; background: rgba(11,37,64,0.75); backdrop-filter: blur(22px); border: 1px solid rgba(255,255,255,0.12); border-radius: 24px; padding: 36px 28px; box-shadow: 0 20px 60px rgba(0,0,0,0.5); animation: slideUp 0.6s ease; }

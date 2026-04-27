@@ -1,4 +1,4 @@
-    /* ===== RESET & VARIABLES (same as original) ===== */
+/* ===== RESET & VARIABLES (same as original) ===== */
     *,
     *::before,
     *::after {
@@ -179,16 +179,28 @@
       transform-origin: center;
     }
 
+    .hamburger-btn #closehamburger {
+      display: none;
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      background: transparent;
+      color: var(--cream);
+      font-size: 1.3rem;
+      font-weight: bold;
+      font-family: 'Syne', sans-serif;
+      line-height: 1;
+      width: auto;
+      height: auto;
+    }
 
-    .hamburger-btn.active span:nth-child(1) {
-      transform: translateY(7px) rotate(45deg);
+    .hamburger-btn.active #closehamburger {
+      display: block;
     }
-    .hamburger-btn.active span:nth-child(2) {
-      opacity: 0;
-      transform: scale(0.8);
-    }
-    .hamburger-btn.active span:nth-child(3) {
-      transform: translateY(-7px) rotate(-45deg);
+
+    .hamburger-btn.active span:not(#closehamburger) {
+      display: none;
     }
 
     .mobile-nav-panel {
@@ -259,7 +271,7 @@
       background: var(--gold);
       color: var(--navy);
     }
-/
+
     .menu-overlay {
       position: fixed;
       top: 0;

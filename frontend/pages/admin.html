@@ -1,0 +1,912 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Admin — Plazza</title>
+<link rel="stylesheet" href="../css/main.css">
+<style>
+  /* ── Layout ── */
+  *, *::before, *::after { box-sizing: border-box; }
+  body { margin: 0; display: flex; height: 100vh; overflow: hidden; background: var(--bg); }
+
+  .admin-sidebar {
+    width: 220px; flex-shrink: 0;
+    background: var(--ink);
+    display: flex; flex-direction: column;
+    height: 100vh; overflow-y: auto;
+  }
+  .admin-logo {
+    padding: 22px 20px 16px;
+    font-family: var(--font-display); font-size: 20px; font-weight: 800;
+    color: white; letter-spacing: -.5px;
+    border-bottom: 1px solid rgba(255,255,255,.1);
+  }
+  .admin-logo span { font-size: 10px; font-weight: 500; display: block; color: rgba(255,255,255,.4); letter-spacing: .1em; text-transform: uppercase; margin-top: 2px; }
+
+  .admin-nav { padding: 12px 10px; flex: 1; }
+  .admin-nav-item {
+    display: flex; align-items: center; gap: 10px;
+    padding: 9px 12px; border-radius: 8px;
+    font-size: 13px; font-weight: 500; color: rgba(255,255,255,.55);
+    cursor: pointer; transition: all .15s; margin-bottom: 2px;
+    border: none; background: none; width: 100%; text-align: left;
+  }
+  .admin-nav-item:hover { background: rgba(255,255,255,.08); color: rgba(255,255,255,.85); }
+  .admin-nav-item.active { background: rgba(255,255,255,.13); color: white; font-weight: 600; }
+  .admin-nav-item svg { flex-shrink: 0; opacity: .7; }
+  .admin-nav-item.active svg { opacity: 1; }
+
+  .admin-nav-section {
+    font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: .1em;
+    color: rgba(255,255,255,.25); padding: 16px 12px 6px;
+  }
+
+  .admin-main {
+    flex: 1; display: flex; flex-direction: column; height: 100vh; overflow: hidden;
+  }
+  .admin-topbar {
+    height: 56px; border-bottom: 1.5px solid var(--border);
+    display: flex; align-items: center; padding: 0 28px;
+    background: var(--surface); flex-shrink: 0;
+    justify-content: space-between;
+  }
+  .admin-topbar-title { font-size: 15px; font-weight: 700; color: var(--ink); }
+  .admin-topbar-right { display: flex; align-items: center; gap: 12px; }
+  .admin-badge { font-size: 11px; font-weight: 600; padding: 3px 8px; border-radius: 99px; background: var(--surface-2); color: var(--ink-3); }
+
+  .admin-content { flex: 1; overflow-y: auto; padding: 28px; }
+
+  /* ── Stats ── */
+  .stat-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(170px, 1fr)); gap: 16px; margin-bottom: 28px; }
+  .stat-card {
+    background: var(--surface); border: 1.5px solid var(--border);
+    border-radius: var(--radius-lg); padding: 18px 20px;
+  }
+  .stat-card-label { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .07em; color: var(--ink-3); margin-bottom: 8px; }
+  .stat-card-value { font-size: 28px; font-weight: 800; font-family: var(--font-display); color: var(--ink); letter-spacing: -1px; }
+  .stat-card-sub { font-size: 12px; color: var(--ink-3); margin-top: 4px; }
+  .stat-card.danger .stat-card-value { color: var(--red, #e53e3e); }
+  .stat-card.warn   .stat-card-value { color: #d69e2e; }
+
+  /* ── Toolbar ── */
+  .admin-toolbar {
+    display: flex; align-items: center; gap: 10px; margin-bottom: 18px; flex-wrap: wrap;
+  }
+  .admin-search {
+    flex: 1; min-width: 180px; max-width: 320px;
+    padding: 8px 12px; border: 1.5px solid var(--border); border-radius: var(--radius-md);
+    font-family: var(--font-body); font-size: 13px; color: var(--ink); background: var(--surface);
+    outline: none;
+  }
+  .admin-search:focus { border-color: var(--ink); }
+  .filter-select {
+    padding: 8px 12px; border: 1.5px solid var(--border); border-radius: var(--radius-md);
+    font-family: var(--font-body); font-size: 13px; color: var(--ink); background: var(--surface);
+    outline: none; cursor: pointer;
+  }
+
+  /* ── Table ── */
+  .admin-table-wrap { background: var(--surface); border: 1.5px solid var(--border); border-radius: var(--radius-lg); overflow: hidden; }
+  .admin-table { width: 100%; border-collapse: collapse; }
+  .admin-table th {
+    text-align: left; font-size: 11px; font-weight: 700; text-transform: uppercase;
+    letter-spacing: .06em; color: var(--ink-3);
+    padding: 11px 16px; background: var(--surface-2);
+    border-bottom: 1.5px solid var(--border);
+  }
+  .admin-table td { padding: 12px 16px; font-size: 13px; color: var(--ink-2); border-bottom: 1px solid var(--border); vertical-align: middle; }
+  .admin-table tr:last-child td { border-bottom: none; }
+  .admin-table tr:hover td { background: var(--bg); }
+  .admin-table .name-cell { font-weight: 600; color: var(--ink); }
+  .admin-table .mono { font-family: monospace; font-size: 11px; color: var(--ink-3); }
+
+  /* ── Badges ── */
+  .badge {
+    display: inline-flex; align-items: center; gap: 4px;
+    font-size: 11px; font-weight: 600; padding: 3px 8px; border-radius: 99px;
+  }
+  .badge-active   { background: #c6f6d5; color: #276749; }
+  .badge-warned   { background: #fefcbf; color: #744210; }
+  .badge-suspended{ background: #fed7d7; color: #9b2c2c; }
+  .badge-buyer    { background: #bee3f8; color: #2a4365; }
+  .badge-seller   { background: #e9d8fd; color: #44337a; }
+  .badge-listing  { background: var(--surface-2); color: var(--ink-3); }
+  .badge-active-l { background: #c6f6d5; color: #276749; }
+  .badge-pending  { background: #fefcbf; color: #744210; }
+  .badge-sold     { background: #bee3f8; color: #2a4365; }
+  .badge-deleted  { background: #fed7d7; color: #9b2c2c; }
+
+  /* ── Action buttons ── */
+  .action-btns { display: flex; align-items: center; gap: 4px; }
+  .action-btn {
+    font-size: 11px; font-weight: 600; padding: 4px 10px;
+    border-radius: var(--radius-md); border: 1.5px solid var(--border);
+    cursor: pointer; background: var(--surface); color: var(--ink-2);
+    transition: all .12s; white-space: nowrap;
+  }
+  .action-btn:hover { background: var(--bg); border-color: var(--border-strong); color: var(--ink); }
+  .action-btn.warn    { border-color: #d69e2e; color: #744210; background: #fffff0; }
+  .action-btn.warn:hover { background: #fefcbf; }
+  .action-btn.suspend { border-color: #e53e3e; color: #9b2c2c; background: #fff5f5; }
+  .action-btn.suspend:hover { background: #fed7d7; }
+  .action-btn.restore { border-color: #38a169; color: #276749; background: #f0fff4; }
+  .action-btn.restore:hover { background: #c6f6d5; }
+  .action-btn.kick    { border-color: #e53e3e; color: #9b2c2c; }
+  .action-btn.kick:hover { background: #fff5f5; }
+  .action-btn.view    { border-color: var(--accent); color: var(--accent); }
+  .action-btn.view:hover { background: rgba(0,0,0,.04); }
+
+  /* ── Pagination ── */
+  .admin-pagination { display: flex; align-items: center; gap: 6px; padding: 14px 16px; border-top: 1.5px solid var(--border); background: var(--surface-2); }
+  .pg-btn { padding: 5px 10px; border: 1.5px solid var(--border); border-radius: var(--radius-md); background: var(--surface); font-size: 12px; font-weight: 600; cursor: pointer; color: var(--ink-2); }
+  .pg-btn:hover { border-color: var(--ink); color: var(--ink); }
+  .pg-btn.active { background: var(--ink); color: white; border-color: var(--ink); }
+  .pg-btn:disabled { opacity: .35; cursor: not-allowed; }
+  .pg-info { font-size: 12px; color: var(--ink-3); margin-left: auto; }
+
+  /* ── Modal ── */
+  .modal-overlay {
+    position: fixed; inset: 0; background: rgba(0,0,0,.45);
+    display: flex; align-items: center; justify-content: center;
+    z-index: 9999; padding: 20px;
+  }
+  .modal-box {
+    background: var(--surface); border-radius: var(--radius-lg);
+    padding: 28px; width: 100%; max-width: 440px;
+    box-shadow: 0 20px 60px rgba(0,0,0,.25);
+  }
+  .modal-title { font-size: 17px; font-weight: 700; margin-bottom: 6px; }
+  .modal-sub   { font-size: 13px; color: var(--ink-3); margin-bottom: 18px; }
+  .modal-label { font-size: 12px; font-weight: 600; margin-bottom: 6px; display: block; }
+  .modal-textarea {
+    width: 100%; padding: 10px 12px; border: 1.5px solid var(--border); border-radius: var(--radius-md);
+    font-family: var(--font-body); font-size: 13px; color: var(--ink); background: var(--bg);
+    resize: vertical; min-height: 90px; outline: none;
+  }
+  .modal-textarea:focus { border-color: var(--ink); }
+  .modal-footer { display: flex; gap: 10px; justify-content: flex-end; margin-top: 18px; }
+
+  /* ── Drawer (user detail) ── */
+  .drawer-overlay {
+    position: fixed; inset: 0; background: rgba(0,0,0,.3); z-index: 8888;
+  }
+  .drawer {
+    position: fixed; right: 0; top: 0; height: 100vh; width: 480px; max-width: 95vw;
+    background: var(--surface); border-left: 1.5px solid var(--border);
+    z-index: 8889; overflow-y: auto; padding: 0;
+    box-shadow: -8px 0 40px rgba(0,0,0,.15);
+  }
+  .drawer-header {
+    padding: 20px 24px; border-bottom: 1.5px solid var(--border);
+    display: flex; align-items: center; justify-content: space-between; position: sticky; top: 0; background: var(--surface); z-index: 1;
+  }
+  .drawer-header h3 { font-size: 16px; font-weight: 700; margin: 0; }
+  .drawer-close { background: none; border: none; cursor: pointer; color: var(--ink-3); display: flex; padding: 4px; border-radius: 6px; }
+  .drawer-close:hover { background: var(--surface-2); color: var(--ink); }
+  .drawer-body { padding: 24px; }
+  .drawer-section { margin-bottom: 24px; }
+  .drawer-section-title { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .07em; color: var(--ink-3); margin-bottom: 12px; }
+  .drawer-field { display: flex; justify-content: space-between; padding: 7px 0; border-bottom: 1px solid var(--border); font-size: 13px; }
+  .drawer-field:last-child { border-bottom: none; }
+  .drawer-field-label { color: var(--ink-3); }
+  .drawer-field-value { font-weight: 500; color: var(--ink); text-align: right; max-width: 240px; word-break: break-all; }
+  .drawer-listing-row { display: flex; justify-content: space-between; align-items: center; padding: 8px 0; border-bottom: 1px solid var(--border); font-size: 13px; }
+  .drawer-listing-row:last-child { border-bottom: none; }
+
+  /* ── Message thread ── */
+  .conv-list-item {
+    padding: 14px 16px; border-bottom: 1.5px solid var(--border); cursor: pointer;
+    transition: background .1s;
+  }
+  .conv-list-item:hover { background: var(--bg); }
+  .conv-list-item.active { background: var(--surface-2); }
+  .conv-list-item:last-child { border-bottom: none; }
+  .conv-participants { font-size: 13px; font-weight: 600; color: var(--ink); margin-bottom: 3px; }
+  .conv-snippet { font-size: 12px; color: var(--ink-3); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .conv-meta { font-size: 11px; color: var(--ink-3); margin-top: 4px; }
+
+  .msg-thread { padding: 16px; display: flex; flex-direction: column; gap: 10px; }
+  .msg-bubble-wrap { display: flex; flex-direction: column; }
+  .msg-bubble-wrap.right { align-items: flex-end; }
+  .msg-sender-label { font-size: 11px; color: var(--ink-3); margin-bottom: 3px; font-weight: 500; }
+  .msg-bubble {
+    max-width: 75%; padding: 9px 13px; border-radius: 14px;
+    font-size: 13px; line-height: 1.5; background: var(--surface-2); color: var(--ink);
+  }
+  .msg-bubble-wrap.right .msg-bubble { background: var(--ink); color: white; }
+  .msg-time { font-size: 10px; color: var(--ink-3); margin-top: 3px; }
+
+  .msg-layout { display: grid; grid-template-columns: 300px 1fr; height: calc(100vh - 56px - 56px); }
+  .msg-list { border-right: 1.5px solid var(--border); overflow-y: auto; }
+  .msg-panel { overflow-y: auto; background: var(--bg); }
+  .msg-panel-empty { display: flex; align-items: center; justify-content: center; height: 100%; color: var(--ink-3); font-size: 14px; }
+  .msg-panel-header { padding: 14px 18px; border-bottom: 1.5px solid var(--border); background: var(--surface); position: sticky; top: 0; z-index: 1; }
+  .msg-panel-header h4 { margin: 0 0 2px; font-size: 14px; font-weight: 700; }
+  .msg-panel-header p { margin: 0; font-size: 12px; color: var(--ink-3); }
+
+  /* ── Empty state ── */
+  .admin-empty { text-align: center; padding: 48px 20px; color: var(--ink-3); font-size: 14px; }
+  .admin-empty svg { opacity: .25; margin-bottom: 12px; }
+
+  /* ── Loading skeleton ── */
+  .tbl-skeleton td { padding: 14px 16px; }
+
+  /* ── Responsive ── */
+  @media (max-width: 900px) {
+    .admin-sidebar { display: none; }
+    .msg-layout { grid-template-columns: 1fr; }
+    .msg-list { display: none; }
+  }
+</style>
+</head>
+<body>
+
+<!-- SIDEBAR -->
+<aside class="admin-sidebar">
+  <div class="admin-logo">
+    Plazza
+    <span>Admin Panel</span>
+  </div>
+  <nav class="admin-nav">
+    <div class="admin-nav-section">Overview</div>
+    <button class="admin-nav-item active" data-tab="overview">
+      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></svg>
+      Overview
+    </button>
+
+    <div class="admin-nav-section">Manage</div>
+    <button class="admin-nav-item" data-tab="users">
+      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+      Users
+    </button>
+    <button class="admin-nav-item" data-tab="listings">
+      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"/><line x1="7" y1="7" x2="7.01" y2="7"/></svg>
+      Listings
+    </button>
+    <button class="admin-nav-item" data-tab="messages">
+      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+      Messages
+    </button>
+  </nav>
+</aside>
+
+<!-- MAIN -->
+<div class="admin-main">
+  <div class="admin-topbar">
+    <div class="admin-topbar-title" id="topbar-title">Overview</div>
+    <div class="admin-topbar-right">
+      <span class="admin-badge" id="admin-user-badge">Admin</span>
+      <button class="btn btn-ghost btn-sm" onclick="adminLogout()">Sign out</button>
+    </div>
+  </div>
+  <div class="admin-content" id="admin-content">
+    <div class="admin-empty">Loading…</div>
+  </div>
+</div>
+
+<!-- MODAL -->
+<div id="modal-root"></div>
+<!-- DRAWER -->
+<div id="drawer-root"></div>
+
+<script src="../js/app.js"></script>
+<script>
+// ── Admin auth — uses SEPARATE localStorage keys from user auth ────────────
+const ADMIN_TOKEN_KEY = 'cm_admin_token';
+const ADMIN_USER_KEY  = 'cm_admin_user';
+
+const adminAuth = {
+  getToken: () => localStorage.getItem(ADMIN_TOKEN_KEY),
+  getUser:  () => { try { return JSON.parse(localStorage.getItem(ADMIN_USER_KEY)); } catch { return null; } },
+  clear()   { localStorage.removeItem(ADMIN_TOKEN_KEY); localStorage.removeItem(ADMIN_USER_KEY); },
+};
+
+// Override api.request to always use the admin token on this page
+api.request = async function(method, path, body, useAuth = true) {
+  const headers = { 'Content-Type': 'application/json' };
+  if (useAuth) {
+    const token = adminAuth.getToken();
+    if (token) headers['Authorization'] = `Bearer ${token}`;
+  }
+  const res = await fetch(`/api${path}`, {
+    method, headers,
+    body: body ? JSON.stringify(body) : undefined,
+  });
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.error || 'Request failed');
+  return data;
+};
+
+// ── Auth guard ──────────────────────────────────────────────────────────────
+(function() {
+  const token = adminAuth.getToken();
+  const u     = adminAuth.getUser();
+  if (!token || u?.role !== 'admin') {
+    window.location.replace('admin-login.html'); return;
+  }
+  document.getElementById('admin-user-badge').textContent = u.full_name || 'Admin';
+})();
+
+function adminLogout() { adminAuth.clear(); window.location.replace('admin-login.html'); }
+
+// ── Tab routing ─────────────────────────────────────────────────────────────
+const TABS = { overview: 'Overview', users: 'Users', listings: 'Listings', messages: 'Messages' };
+let currentTab = 'overview';
+
+document.querySelectorAll('.admin-nav-item[data-tab]').forEach(btn => {
+  btn.addEventListener('click', () => switchTab(btn.dataset.tab));
+});
+
+function switchTab(tab) {
+  currentTab = tab;
+  document.querySelectorAll('.admin-nav-item').forEach(b => b.classList.toggle('active', b.dataset.tab === tab));
+  document.getElementById('topbar-title').textContent = TABS[tab];
+  const content = document.getElementById('admin-content');
+  content.innerHTML = '<div class="admin-empty">Loading…</div>';
+  if (tab === 'overview')  renderOverview();
+  if (tab === 'users')     renderUsers();
+  if (tab === 'listings')  renderListings();
+  if (tab === 'messages')  renderMessages();
+}
+
+// ── Helpers ──────────────────────────────────────────────────────────────────
+const fmt = d => d ? new Date(d).toLocaleDateString('en-NG', { day: 'numeric', month: 'short', year: 'numeric' }) : '—';
+const fmtTime = d => d ? new Date(d).toLocaleString('en-NG', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }) : '—';
+
+function statusBadge(s) {
+  const map = { active: 'badge-active', warned: 'badge-warned', suspended: 'badge-suspended' };
+  return `<span class="badge ${map[s] || 'badge-listing'}">${s || 'active'}</span>`;
+}
+function roleBadge(r) {
+  const map = { buyer: 'badge-buyer', seller: 'badge-seller' };
+  return `<span class="badge ${map[r] || ''}">${r}</span>`;
+}
+function listingStatusBadge(s) {
+  const map = { active: 'badge-active-l', pending: 'badge-pending', sold: 'badge-sold', deleted: 'badge-deleted' };
+  return `<span class="badge ${map[s] || 'badge-listing'}">${s}</span>`;
+}
+function skeletonRows(cols, n = 5) {
+  return Array(n).fill(0).map(() =>
+    `<tr class="tbl-skeleton">${Array(cols).fill(0).map(() =>
+      `<td><div class="skeleton" style="height:14px;border-radius:4px;width:${60+Math.random()*30}%"></div></td>`).join('')}</tr>`).join('');
+}
+function paginationHTML(page, pages, total, onPage) {
+  if (pages <= 1) return '';
+  let html = `<div class="admin-pagination">`;
+  html += `<button class="pg-btn" ${page===1?'disabled':''} onclick="${onPage}(${page-1})">←</button>`;
+  for (let i = 1; i <= pages; i++) {
+    if (pages > 7 && Math.abs(i-page) > 2 && i !== 1 && i !== pages) {
+      if (i === 2 || i === pages-1) html += `<span style="padding:0 4px;color:var(--ink-3)">…</span>`;
+      continue;
+    }
+    html += `<button class="pg-btn ${i===page?'active':''}" onclick="${onPage}(${i})">${i}</button>`;
+  }
+  html += `<button class="pg-btn" ${page===pages?'disabled':''} onclick="${onPage}(${page+1})">→</button>`;
+  html += `<span class="pg-info">${total} total</span></div>`;
+  return html;
+}
+
+// ── Modal helpers ────────────────────────────────────────────────────────────
+function showModal({ title, sub, placeholder, confirmLabel, confirmClass = 'btn-primary', onConfirm, noReason }) {
+  const root = document.getElementById('modal-root');
+  root.innerHTML = `
+    <div class="modal-overlay" id="modal-overlay">
+      <div class="modal-box">
+        <div class="modal-title">${title}</div>
+        <div class="modal-sub">${sub}</div>
+        ${noReason ? '' : `
+        <label class="modal-label">Reason</label>
+        <textarea class="modal-textarea" id="modal-reason" placeholder="${placeholder || 'Enter reason…'}"></textarea>
+        `}
+        <div class="modal-footer">
+          <button class="btn btn-ghost" onclick="closeModal()">Cancel</button>
+          <button class="btn ${confirmClass}" id="modal-confirm">${confirmLabel}</button>
+        </div>
+      </div>
+    </div>`;
+  document.getElementById('modal-overlay').addEventListener('click', e => { if (e.target.id === 'modal-overlay') closeModal(); });
+  document.getElementById('modal-confirm').addEventListener('click', () => {
+    const reason = noReason ? null : document.getElementById('modal-reason').value.trim();
+    if (!noReason && !reason) { document.getElementById('modal-reason').style.borderColor = 'var(--red,#e53e3e)'; return; }
+    onConfirm(reason);
+  });
+}
+function closeModal() { document.getElementById('modal-root').innerHTML = ''; }
+
+// ── Drawer helper ────────────────────────────────────────────────────────────
+function closeDrawer() { document.getElementById('drawer-root').innerHTML = ''; }
+function showDrawer(html) {
+  document.getElementById('drawer-root').innerHTML = `
+    <div class="drawer-overlay" onclick="closeDrawer()"></div>
+    <div class="drawer">${html}</div>`;
+}
+
+// ══════════════════════════════════════════════════════════════════════════════
+// OVERVIEW
+// ══════════════════════════════════════════════════════════════════════════════
+async function renderOverview() {
+  const c = document.getElementById('admin-content');
+  c.innerHTML = `<div class="stat-grid">${skeletonRows(1, 8).replace(/tbl-skeleton/g,'').replace(/<tr>/g,'<div class="stat-card">').replace(/<\/tr>/g,'</div>').replace(/<td>/g,'').replace(/<\/td>/g,'')}</div>`;
+
+  try {
+    const s = await api.get('/admin/stats');
+    c.innerHTML = `
+      <div class="stat-grid">
+        <div class="stat-card"><div class="stat-card-label">Total Users</div><div class="stat-card-value">${s.totalUsers}</div><div class="stat-card-sub">${s.buyers} buyers · ${s.sellers} sellers</div></div>
+        <div class="stat-card"><div class="stat-card-label">Active Listings</div><div class="stat-card-value">${s.activeListings}</div><div class="stat-card-sub">${s.totalListings} total</div></div>
+        <div class="stat-card"><div class="stat-card-label">Conversations</div><div class="stat-card-value">${s.totalConversations}</div><div class="stat-card-sub">${s.totalMessages} messages</div></div>
+        <div class="stat-card"><div class="stat-card-label">Orders</div><div class="stat-card-value">${s.totalOrders}</div></div>
+        <div class="stat-card warn"><div class="stat-card-label">Warned</div><div class="stat-card-value">${s.warnedUsers}</div><div class="stat-card-sub">users with warnings</div></div>
+        <div class="stat-card danger"><div class="stat-card-label">Suspended</div><div class="stat-card-value">${s.suspendedUsers}</div><div class="stat-card-sub">accounts suspended</div></div>
+      </div>
+      <div style="display:flex;gap:12px;flex-wrap:wrap;">
+        <button class="btn btn-surface" onclick="switchTab('users')">Manage Users →</button>
+        <button class="btn btn-surface" onclick="switchTab('listings')">Manage Listings →</button>
+        <button class="btn btn-surface" onclick="switchTab('messages')">View Messages →</button>
+      </div>`;
+  } catch(e) { c.innerHTML = `<div class="admin-empty">Failed to load stats: ${e.message}</div>`; }
+}
+
+// ══════════════════════════════════════════════════════════════════════════════
+// USERS
+// ══════════════════════════════════════════════════════════════════════════════
+let usersState = { q: '', role: 'all', status: 'all', page: 1 };
+
+async function renderUsers(resetPage) {
+  if (resetPage) usersState.page = 1;
+  const c = document.getElementById('admin-content');
+  c.innerHTML = `
+    <div class="admin-toolbar">
+      <input class="admin-search" id="user-search" placeholder="Search name or email…" value="${usersState.q}">
+      <select class="filter-select" id="user-role-filter">
+        <option value="all" ${usersState.role==='all'?'selected':''}>All roles</option>
+        <option value="buyer" ${usersState.role==='buyer'?'selected':''}>Buyers</option>
+        <option value="seller" ${usersState.role==='seller'?'selected':''}>Sellers</option>
+      </select>
+      <select class="filter-select" id="user-status-filter">
+        <option value="all" ${usersState.status==='all'?'selected':''}>All statuses</option>
+        <option value="active" ${usersState.status==='active'?'selected':''}>Active</option>
+        <option value="warned" ${usersState.status==='warned'?'selected':''}>Warned</option>
+        <option value="suspended" ${usersState.status==='suspended'?'selected':''}>Suspended</option>
+      </select>
+    </div>
+    <div class="admin-table-wrap">
+      <table class="admin-table">
+        <thead><tr>
+          <th>Name</th><th>Email</th><th>Role</th><th>Status</th>
+          <th>Listings</th><th>Joined</th><th>Actions</th>
+        </tr></thead>
+        <tbody id="users-tbody">${skeletonRows(7)}</tbody>
+      </table>
+      <div id="users-pagination"></div>
+    </div>`;
+
+  // Wire filters
+  let searchTimer;
+  document.getElementById('user-search').addEventListener('input', e => {
+    usersState.q = e.target.value;
+    clearTimeout(searchTimer);
+    searchTimer = setTimeout(() => fetchUsers(1), 350);
+  });
+  document.getElementById('user-role-filter').addEventListener('change', e => { usersState.role = e.target.value; fetchUsers(1); });
+  document.getElementById('user-status-filter').addEventListener('change', e => { usersState.status = e.target.value; fetchUsers(1); });
+
+  fetchUsers(usersState.page);
+}
+
+async function fetchUsers(page) {
+  usersState.page = page;
+  const tbody = document.getElementById('users-tbody');
+  const pgDiv = document.getElementById('users-pagination');
+  if (!tbody) return;
+  tbody.innerHTML = skeletonRows(7);
+  try {
+    const { q, role, status } = usersState;
+    const params = new URLSearchParams({ page, limit: 20 });
+    if (q) params.set('q', q);
+    if (role !== 'all') params.set('role', role);
+    if (status !== 'all') params.set('status', status);
+    const data = await api.get(`/admin/users?${params}`);
+    if (!data.users.length) {
+      tbody.innerHTML = `<tr><td colspan="7" style="text-align:center;color:var(--ink-3);padding:32px">No users found</td></tr>`;
+      pgDiv.innerHTML = ''; return;
+    }
+    tbody.innerHTML = data.users.map(u => `
+      <tr>
+        <td class="name-cell">${u.full_name}</td>
+        <td class="mono">${u.email}</td>
+        <td>${roleBadge(u.role)}</td>
+        <td>${statusBadge(u.account_status)}</td>
+        <td>${u.listing_count || 0}</td>
+        <td>${fmt(u.created_at)}</td>
+        <td>
+          <div class="action-btns">
+            <button class="action-btn view" onclick="openUserDrawer('${u._id}')">View</button>
+            ${u.account_status !== 'warned' && u.account_status !== 'suspended'
+              ? `<button class="action-btn warn" onclick="warnUser('${u._id}','${escHtml(u.full_name)}')">Warn</button>` : ''}
+            ${u.account_status !== 'suspended'
+              ? `<button class="action-btn suspend" onclick="suspendUser('${u._id}','${escHtml(u.full_name)}')">Suspend</button>`
+              : `<button class="action-btn restore" onclick="unsuspendUser('${u._id}','${escHtml(u.full_name)}')">Restore</button>`}
+            <button class="action-btn kick" onclick="kickUser('${u._id}','${escHtml(u.full_name)}')">Kick</button>
+          </div>
+        </td>
+      </tr>`).join('');
+    pgDiv.innerHTML = paginationHTML(data.page, data.pages, data.total, 'fetchUsers');
+  } catch(e) {
+    if (tbody) tbody.innerHTML = `<tr><td colspan="7" style="color:var(--red,#e53e3e);padding:20px">${e.message}</td></tr>`;
+  }
+}
+window.fetchUsers = fetchUsers;
+
+// ── User drawer ──────────────────────────────────────────────────────────────
+async function openUserDrawer(id) {
+  showDrawer(`
+    <div class="drawer-header">
+      <h3>User Details</h3>
+      <button class="drawer-close" onclick="closeDrawer()">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+      </button>
+    </div>
+    <div class="drawer-body"><div class="skeleton" style="height:200px;border-radius:8px"></div></div>`);
+  try {
+    const u = await api.get(`/admin/users/${id}`);
+    const drawerEl = document.querySelector('.drawer');
+    if (!drawerEl) return;
+    drawerEl.querySelector('.drawer-body').innerHTML = `
+      <div class="drawer-section">
+        <div class="drawer-section-title">Account</div>
+        <div class="drawer-field"><span class="drawer-field-label">Name</span><span class="drawer-field-value">${u.full_name}</span></div>
+        <div class="drawer-field"><span class="drawer-field-label">Email</span><span class="drawer-field-value">${u.email}</span></div>
+        <div class="drawer-field"><span class="drawer-field-label">Role</span><span class="drawer-field-value">${roleBadge(u.role)}</span></div>
+        <div class="drawer-field"><span class="drawer-field-label">Status</span><span class="drawer-field-value">${statusBadge(u.account_status)}</span></div>
+        <div class="drawer-field"><span class="drawer-field-label">Verified</span><span class="drawer-field-value">${u.is_verified ? '✅ Yes' : '—'}</span></div>
+        <div class="drawer-field"><span class="drawer-field-label">University</span><span class="drawer-field-value">${u.university || '—'}</span></div>
+        <div class="drawer-field"><span class="drawer-field-label">Joined</span><span class="drawer-field-value">${fmtTime(u.created_at)}</span></div>
+        ${u.business_name ? `<div class="drawer-field"><span class="drawer-field-label">Business</span><span class="drawer-field-value">${u.business_name}</span></div>` : ''}
+        <div class="drawer-field"><span class="drawer-field-label">Credits</span><span class="drawer-field-value">${u.listing_credits}</span></div>
+        <div class="drawer-field"><span class="drawer-field-label">Conversations</span><span class="drawer-field-value">${u.conv_count}</span></div>
+      </div>
+      ${u.account_status !== 'active' ? `
+      <div class="drawer-section">
+        <div class="drawer-section-title">Moderation</div>
+        ${u.warn_reason ? `<div class="drawer-field"><span class="drawer-field-label">Warning</span><span class="drawer-field-value">${u.warn_reason}</span></div>` : ''}
+        ${u.suspend_reason ? `<div class="drawer-field"><span class="drawer-field-label">Suspension</span><span class="drawer-field-value">${u.suspend_reason}</span></div>` : ''}
+        ${u.warned_at ? `<div class="drawer-field"><span class="drawer-field-label">Warned at</span><span class="drawer-field-value">${fmtTime(u.warned_at)}</span></div>` : ''}
+        ${u.suspended_at ? `<div class="drawer-field"><span class="drawer-field-label">Suspended at</span><span class="drawer-field-value">${fmtTime(u.suspended_at)}</span></div>` : ''}
+      </div>` : ''}
+      ${u.id_front_url ? `
+      <div class="drawer-section">
+        <div class="drawer-section-title">ID Verification</div>
+        <div class="drawer-field"><span class="drawer-field-label">ID Type</span><span class="drawer-field-value">${u.id_type || '—'}</span></div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:8px">
+          <a href="${u.id_front_url}" target="_blank"><img src="${u.id_front_url}" style="width:100%;border-radius:8px;border:1.5px solid var(--border)" alt="Front"></a>
+          ${u.id_back_url ? `<a href="${u.id_back_url}" target="_blank"><img src="${u.id_back_url}" style="width:100%;border-radius:8px;border:1.5px solid var(--border)" alt="Back"></a>` : ''}
+        </div>
+      </div>` : ''}
+      ${u.listings?.length ? `
+      <div class="drawer-section">
+        <div class="drawer-section-title">Listings (${u.listings.length})</div>
+        ${u.listings.map(l => `
+          <div class="drawer-listing-row">
+            <div>
+              <div style="font-weight:600;font-size:13px">${l.title}</div>
+              <div style="font-size:11px;color:var(--ink-3)">${formatPrice(l.price)} · ${l.category}</div>
+            </div>
+            ${listingStatusBadge(l.status)}
+          </div>`).join('')}
+      </div>` : ''}
+      <div class="drawer-section" style="display:flex;flex-direction:column;gap:8px;">
+        <div class="drawer-section-title">Actions</div>
+        ${u.account_status !== 'suspended'
+          ? `<button class="btn btn-sm" style="background:#fffff0;border:1.5px solid #d69e2e;color:#744210" onclick="closeDrawer();warnUser('${u._id}','${escHtml(u.full_name)}')">⚠️ Warn user</button>
+             <button class="btn btn-sm" style="background:#fff5f5;border:1.5px solid #e53e3e;color:#9b2c2c" onclick="closeDrawer();suspendUser('${u._id}','${escHtml(u.full_name)}')">🔒 Suspend account</button>`
+          : `<button class="btn btn-sm" style="background:#f0fff4;border:1.5px solid #38a169;color:#276749" onclick="closeDrawer();unsuspendUser('${u._id}','${escHtml(u.full_name)}')">✅ Restore account</button>`}
+        <button class="btn btn-sm" style="background:#fff5f5;border:1.5px solid #e53e3e;color:#9b2c2c" onclick="closeDrawer();kickUser('${u._id}','${escHtml(u.full_name)}')">🗑️ Kick (delete) user</button>
+      </div>`;
+  } catch(e) {
+    const db = document.querySelector('.drawer-body');
+    if (db) db.innerHTML = `<div style="color:var(--red,#e53e3e);padding:20px">${e.message}</div>`;
+  }
+}
+window.openUserDrawer = openUserDrawer;
+
+// ── User actions ─────────────────────────────────────────────────────────────
+function warnUser(id, name) {
+  showModal({
+    title: `Warn ${name}`,
+    sub: 'A warning will be recorded on this account.',
+    placeholder: 'e.g. Inappropriate listing content',
+    confirmLabel: 'Send Warning',
+    confirmClass: 'btn-accent',
+    onConfirm: async (reason) => {
+      try {
+        closeModal();
+        await api.post(`/admin/users/${id}/warn`, { reason });
+        toast(`${name} has been warned.`, 'success');
+        if (currentTab === 'users') fetchUsers(usersState.page);
+      } catch(e) { toast(e.message, 'error'); }
+    }
+  });
+}
+
+function suspendUser(id, name) {
+  showModal({
+    title: `Suspend ${name}`,
+    sub: 'This user will be prevented from using the platform.',
+    placeholder: 'e.g. Repeated policy violations',
+    confirmLabel: 'Suspend Account',
+    confirmClass: 'btn-primary',
+    onConfirm: async (reason) => {
+      try {
+        closeModal();
+        await api.post(`/admin/users/${id}/suspend`, { reason });
+        toast(`${name} has been suspended.`, 'success');
+        if (currentTab === 'users') fetchUsers(usersState.page);
+      } catch(e) { toast(e.message, 'error'); }
+    }
+  });
+}
+
+function unsuspendUser(id, name) {
+  showModal({
+    title: `Restore ${name}`,
+    sub: 'This will lift the suspension and restore full access.',
+    confirmLabel: 'Restore Account',
+    confirmClass: 'btn-primary',
+    noReason: true,
+    onConfirm: async () => {
+      try {
+        closeModal();
+        await api.post(`/admin/users/${id}/unsuspend`, {});
+        toast(`${name}'s account has been restored.`, 'success');
+        if (currentTab === 'users') fetchUsers(usersState.page);
+      } catch(e) { toast(e.message, 'error'); }
+    }
+  });
+}
+
+function kickUser(id, name) {
+  showModal({
+    title: `Kick ${name}?`,
+    sub: 'This permanently deletes the user account, all their listings, and conversations. This cannot be undone.',
+    placeholder: 'Reason for removal',
+    confirmLabel: 'Delete Account',
+    confirmClass: 'btn-primary',
+    onConfirm: async () => {
+      try {
+        closeModal();
+        await api.delete(`/admin/users/${id}`);
+        toast(`${name}'s account has been deleted.`, 'success');
+        if (currentTab === 'users') fetchUsers(usersState.page);
+      } catch(e) { toast(e.message, 'error'); }
+    }
+  });
+}
+
+window.warnUser = warnUser;
+window.suspendUser = suspendUser;
+window.unsuspendUser = unsuspendUser;
+window.kickUser = kickUser;
+
+// ══════════════════════════════════════════════════════════════════════════════
+// LISTINGS
+// ══════════════════════════════════════════════════════════════════════════════
+let listingsState = { q: '', status: 'all', page: 1 };
+
+async function renderListings(resetPage) {
+  if (resetPage) listingsState.page = 1;
+  const c = document.getElementById('admin-content');
+  c.innerHTML = `
+    <div class="admin-toolbar">
+      <input class="admin-search" id="listing-search" placeholder="Search listings…" value="${listingsState.q}">
+      <select class="filter-select" id="listing-status-filter">
+        <option value="all" ${listingsState.status==='all'?'selected':''}>All statuses</option>
+        <option value="active" ${listingsState.status==='active'?'selected':''}>Active</option>
+        <option value="pending" ${listingsState.status==='pending'?'selected':''}>Pending</option>
+        <option value="sold" ${listingsState.status==='sold'?'selected':''}>Sold</option>
+        <option value="deleted" ${listingsState.status==='deleted'?'selected':''}>Deleted</option>
+      </select>
+    </div>
+    <div class="admin-table-wrap">
+      <table class="admin-table">
+        <thead><tr>
+          <th>Title</th><th>Seller</th><th>Category</th><th>Price</th>
+          <th>Status</th><th>Views</th><th>Created</th><th>Actions</th>
+        </tr></thead>
+        <tbody id="listings-tbody">${skeletonRows(8)}</tbody>
+      </table>
+      <div id="listings-pagination"></div>
+    </div>`;
+
+  let searchTimer;
+  document.getElementById('listing-search').addEventListener('input', e => {
+    listingsState.q = e.target.value;
+    clearTimeout(searchTimer);
+    searchTimer = setTimeout(() => fetchListings(1), 350);
+  });
+  document.getElementById('listing-status-filter').addEventListener('change', e => {
+    listingsState.status = e.target.value; fetchListings(1);
+  });
+
+  fetchListings(listingsState.page);
+}
+
+async function fetchListings(page) {
+  listingsState.page = page;
+  const tbody = document.getElementById('listings-tbody');
+  const pgDiv = document.getElementById('listings-pagination');
+  if (!tbody) return;
+  tbody.innerHTML = skeletonRows(8);
+  try {
+    const params = new URLSearchParams({ page, limit: 20 });
+    if (listingsState.q) params.set('q', listingsState.q);
+    if (listingsState.status !== 'all') params.set('status', listingsState.status);
+    const data = await api.get(`/admin/listings?${params}`);
+    if (!data.listings.length) {
+      tbody.innerHTML = `<tr><td colspan="8" style="text-align:center;color:var(--ink-3);padding:32px">No listings found</td></tr>`;
+      pgDiv.innerHTML = ''; return;
+    }
+    tbody.innerHTML = data.listings.map(l => `
+      <tr>
+        <td class="name-cell" style="max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${escHtml(l.title)}">${l.title}</td>
+        <td>
+          <div style="font-size:13px">${l.seller_name || '—'}</div>
+          <div class="mono">${l.seller_email || ''}</div>
+        </td>
+        <td>${l.category}</td>
+        <td style="font-weight:600">${formatPrice(l.price)}</td>
+        <td>${listingStatusBadge(l.status)}</td>
+        <td>${l.views || 0}</td>
+        <td>${fmt(l.created_at)}</td>
+        <td>
+          <div class="action-btns">
+            ${l.status !== 'active'   ? `<button class="action-btn restore" onclick="setListingStatus('${l._id}','active')">Activate</button>` : ''}
+            ${l.status !== 'pending'  ? `<button class="action-btn warn"    onclick="setListingStatus('${l._id}','pending')">Pending</button>` : ''}
+            ${l.status !== 'deleted'  ? `<button class="action-btn kick"    onclick="removeListingConfirm('${l._id}','${escHtml(l.title)}')">Remove</button>` : ''}
+          </div>
+        </td>
+      </tr>`).join('');
+    pgDiv.innerHTML = paginationHTML(data.page, data.pages, data.total, 'fetchListings');
+  } catch(e) {
+    if (tbody) tbody.innerHTML = `<tr><td colspan="8" style="color:var(--red,#e53e3e);padding:20px">${e.message}</td></tr>`;
+  }
+}
+window.fetchListings = fetchListings;
+
+async function setListingStatus(id, status) {
+  try {
+    await api.patch(`/admin/listings/${id}/status`, { status });
+    toast(`Listing marked as ${status}`, 'success');
+    fetchListings(listingsState.page);
+  } catch(e) { toast(e.message, 'error'); }
+}
+
+function removeListingConfirm(id, title) {
+  showModal({
+    title: 'Remove listing?',
+    sub: `"${title}" will be removed from the marketplace.`,
+    confirmLabel: 'Remove Listing',
+    confirmClass: 'btn-primary',
+    noReason: true,
+    onConfirm: async () => {
+      try {
+        closeModal();
+        await api.delete(`/admin/listings/${id}`);
+        toast('Listing removed.', 'success');
+        fetchListings(listingsState.page);
+      } catch(e) { toast(e.message, 'error'); }
+    }
+  });
+}
+window.setListingStatus = setListingStatus;
+window.removeListingConfirm = removeListingConfirm;
+
+// ══════════════════════════════════════════════════════════════════════════════
+// MESSAGES
+// ══════════════════════════════════════════════════════════════════════════════
+let msgsState = { page: 1, selectedConvId: null };
+
+async function renderMessages() {
+  const c = document.getElementById('admin-content');
+  c.innerHTML = `
+    <div class="admin-table-wrap" style="overflow:hidden">
+      <div class="msg-layout">
+        <div class="msg-list" id="msg-conv-list">
+          <div style="padding:12px 16px;border-bottom:1.5px solid var(--border);font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:var(--ink-3)">Conversations</div>
+          <div id="conv-list-inner">${skeletonRows(3, 6).replace(/<tr[^>]*>|<\/tr>/g,'').replace(/<td[^>]*>/g,'<div style="padding:14px 16px;border-bottom:1px solid var(--border)">').replace(/<\/td>/g,'</div>').replace(/<div class="skeleton"[^>]*>/g,'<div class="skeleton" style="height:12px;margin-bottom:6px">').replace(/<\/div><div class="skeleton"/g,'</div><div class="skeleton" style="height:10px;width:60%"')}</div>
+          <div id="conv-list-pg"></div>
+        </div>
+        <div class="msg-panel" id="msg-thread-panel">
+          <div class="msg-panel-empty">Select a conversation to read messages</div>
+        </div>
+      </div>
+    </div>`;
+  fetchConversations(1);
+}
+
+async function fetchConversations(page) {
+  msgsState.page = page;
+  const inner = document.getElementById('conv-list-inner');
+  const pgDiv = document.getElementById('conv-list-pg');
+  if (!inner) return;
+  try {
+    const data = await api.get(`/admin/conversations?page=${page}&limit=30`);
+    if (!data.conversations.length) {
+      inner.innerHTML = '<div style="padding:24px;text-align:center;color:var(--ink-3);font-size:13px">No conversations</div>';
+      pgDiv.innerHTML = ''; return;
+    }
+    inner.innerHTML = data.conversations.map(c => `
+      <div class="conv-list-item ${msgsState.selectedConvId === String(c._id) ? 'active' : ''}"
+           onclick="openConversation('${c._id}')">
+        <div class="conv-participants">${c.buyer_id?.full_name || '?'} ↔ ${c.seller_id?.full_name || '?'}</div>
+        <div class="conv-snippet">${c.last_message || 'No messages yet'}</div>
+        <div class="conv-meta">${c.listing_id?.title ? `Re: ${c.listing_id.title} · ` : ''}${fmtTime(c.last_message_at)}</div>
+      </div>`).join('');
+    // Minimal pagination for conv list
+    pgDiv.innerHTML = data.pages > 1
+      ? `<div style="display:flex;gap:6px;padding:10px 12px;border-top:1.5px solid var(--border)">
+          <button class="pg-btn" ${page===1?'disabled':''} onclick="fetchConversations(${page-1})">←</button>
+          <span style="font-size:12px;color:var(--ink-3);margin:auto">${page}/${data.pages}</span>
+          <button class="pg-btn" ${page===data.pages?'disabled':''} onclick="fetchConversations(${page+1})">→</button>
+         </div>`
+      : '';
+  } catch(e) {
+    if (inner) inner.innerHTML = `<div style="padding:16px;color:var(--red,#e53e3e);font-size:13px">${e.message}</div>`;
+  }
+}
+window.fetchConversations = fetchConversations;
+
+async function openConversation(id) {
+  msgsState.selectedConvId = id;
+  // Update active state in list
+  document.querySelectorAll('.conv-list-item').forEach(el => {
+    el.classList.toggle('active', el.getAttribute('onclick')?.includes(id));
+  });
+  const panel = document.getElementById('msg-thread-panel');
+  if (!panel) return;
+  panel.innerHTML = '<div class="msg-panel-empty">Loading…</div>';
+  try {
+    const data = await api.get(`/admin/conversations/${id}`);
+    const { conversation: cv, messages } = data;
+    const buyerName  = cv.buyer_id?.full_name  || 'Buyer';
+    const sellerName = cv.seller_id?.full_name || 'Seller';
+    const buyerId    = String(cv.buyer_id?._id  || cv.buyer_id);
+    panel.innerHTML = `
+      <div class="msg-panel-header">
+        <h4>${buyerName} ↔ ${sellerName}</h4>
+        <p>${cv.listing_id?.title ? `Re: "${cv.listing_id.title}" · ${formatPrice(cv.listing_id.price)}` : 'General conversation'} · ${messages.length} messages</p>
+      </div>
+      <div class="msg-thread" id="msg-thread">
+        ${messages.length ? messages.map(m => {
+          const isbuyer = String(m.sender_id) === buyerId || m.sender_role === 'buyer';
+          return `
+            <div class="msg-bubble-wrap ${isbuyer ? 'left' : 'right'}">
+              <div class="msg-sender-label">${m.sender_name || 'Unknown'} (${m.sender_role || '?'})</div>
+              <div class="msg-bubble">${escHtml(m.content)}</div>
+              <div class="msg-time">${fmtTime(m.created_at)}</div>
+            </div>`;
+        }).join('') : '<div style="text-align:center;color:var(--ink-3);font-size:13px;padding:24px">No messages yet</div>'}
+      </div>`;
+    // Scroll to bottom of thread
+    const thread = document.getElementById('msg-thread');
+    if (thread) thread.scrollIntoView({ block: 'end' });
+  } catch(e) {
+    if (panel) panel.innerHTML = `<div class="msg-panel-empty" style="color:var(--red,#e53e3e)">${e.message}</div>`;
+  }
+}
+window.openConversation = openConversation;
+
+// ── Misc helpers ─────────────────────────────────────────────────────────────
+function escHtml(str) {
+  return String(str || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
+}
+
+// ── api.patch — not in app.js, add it here ───────────────────────────────────
+api.patch = (path, body) => api.request('PATCH', path, body, true);
+
+// ── Boot ─────────────────────────────────────────────────────────────────────
+renderOverview();
+</script>
+</body>
+</html>

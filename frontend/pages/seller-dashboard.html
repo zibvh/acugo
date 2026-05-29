@@ -292,14 +292,24 @@
       </div>
     </div>`).join('');
 
-  function buyCredits(i) {
+  async function buyCredits(i) {
     const tier = TIERS[i];
     const currentUser = auth.getUser();
     if (!currentUser?.email) { toast('Please log in again', 'error'); return; }
 
+    // Always fetch the public key from the backend so it matches the secret key
+    let paystackPublicKey;
+    try {
+      const keyRes = await api.get('/auth/paystack-public-key', false);
+      paystackPublicKey = keyRes.publicKey;
+    } catch(e) {
+      toast('Payment gateway not configured — contact support', 'error');
+      return;
+    }
+
     function launchPaystack() {
       const handler = PaystackPop.setup({
-        key: window.PAYSTACK_PUBLIC_KEY || 'pk_test_8795eab4a6c71967df7f66677a0c94aed91e543c',
+        key: paystackPublicKey,
         email: currentUser.email,
         amount: tier.price,
         currency: 'NGN',
@@ -312,14 +322,6 @@
             auth.save(auth.getToken(), updated);
             document.getElementById('credits-num').textContent = updated.listing_credits ?? 0;
             toast(tier.credits + ' credit' + (tier.credits > 1 ? 's' : '') + ' added!', 'success');
-            // Re-fetch fresh user from server to ensure localStorage stays in sync
-            setTimeout(async () => {
-              try {
-                const freshUser = await api.get('/auth/me');
-                auth.save(auth.getToken(), freshUser);
-                document.getElementById('credits-num').textContent = freshUser.listing_credits ?? 0;
-              } catch (_) {}
-            }, 1500);
           } catch(e) {
             toast(e.message || 'Could not credit account — contact support', 'error');
           }

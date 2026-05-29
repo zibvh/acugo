@@ -258,6 +258,13 @@ router.get('/vapid-public-key', (req, res) => {
   res.json({ publicKey: key });
 });
 
+// ─── GET /api/auth/paystack-public-key ───────────────────────────────────────
+router.get('/paystack-public-key', (req, res) => {
+  const key = process.env.PAYSTACK_PUBLIC_KEY;
+  if (!key) return res.status(404).json({ error: 'Paystack not configured' });
+  res.json({ publicKey: key });
+});
+
 // ─── GET /api/auth/me ─────────────────────────────────────────────────────────
 router.get('/me', authMiddleware, async (req, res) => {
   try {

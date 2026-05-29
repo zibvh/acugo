@@ -1,7 +1,7 @@
 {
   "name": "plazza-backend",
   "version": "1.0.0",
-  "description": "Plazza API — ACU Campus Marketplace",
+  "description": "Plazza API \u2014 ACU Campus Marketplace",
   "main": "server.js",
   "scripts": {
     "start": "node server.js",
@@ -20,6 +20,7 @@
     "cloudinary": "^1.41.3",
     "web-push": "^3.6.7",
     "nodemailer": "^6.9.14",
-    "express-rate-limit": "^7.4.1"
+    "express-rate-limit": "^7.4.1",
+    "node-fetch": "^2.7.0"
   }
 }

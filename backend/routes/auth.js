@@ -318,13 +318,21 @@ router.post('/credits/verify', authMiddleware, async (req, res) => {
     const { reference, credits } = req.body;
     if (!reference) return res.status(400).json({ error: 'reference required' });
 
-    const paystackRes  = await fetch(`https://api.paystack.co/transaction/verify/${encodeURIComponent(reference)}`, {
+    // Use node-fetch as fallback for Node < 18 where global fetch is unavailable
+    const _fetch = typeof fetch !== 'undefined' ? fetch : require('node-fetch');
+
+    const paystackRes  = await _fetch(`https://api.paystack.co/transaction/verify/${encodeURIComponent(reference)}`, {
       headers: { Authorization: `Bearer ${process.env.PAYSTACK_SECRET_KEY}` },
     });
     const paystackData = await paystackRes.json();
 
-    if (!paystackData.status || paystackData.data?.status !== 'success')
-      return res.status(400).json({ error: 'Payment not verified' });
+    // Log full Paystack response so you can debug in Render logs
+    console.log('[credits/verify] Paystack response:', JSON.stringify(paystackData));
+
+    if (!paystackData.status || paystackData.data?.status !== 'success') {
+      console.error('[credits/verify] Payment not verified. Paystack status:', paystackData.data?.status, 'message:', paystackData.message);
+      return res.status(400).json({ error: 'Payment not verified: ' + (paystackData.message || paystackData.data?.gateway_response || 'unknown') });
+    }
 
     const existing = await User.findOne({ used_payment_refs: reference });
     if (existing) return res.status(409).json({ error: 'Payment reference already used' });
@@ -339,8 +347,10 @@ router.post('/credits/verify', authMiddleware, async (req, res) => {
     const tier        = CREDIT_TIERS.find(t => t.amountKobo === paidAmount);
     const creditAmount = tier ? tier.credits : (credits ? parseInt(credits) : null);
 
+    console.log('[credits/verify] paidAmount:', paidAmount, 'tier:', tier, 'creditAmount:', creditAmount);
+
     if (!creditAmount || creditAmount < 1)
-      return res.status(400).json({ error: 'Could not determine credits for this payment amount' });
+      return res.status(400).json({ error: 'Could not determine credits for this payment amount (paid: ' + paidAmount + ' kobo)' });
 
     const user = await User.findByIdAndUpdate(
       req.user.id,
@@ -348,9 +358,13 @@ router.post('/credits/verify', authMiddleware, async (req, res) => {
       { new: true }
     ).select('-password_hash -email_verify_token -password_reset_token');
 
+    console.log('[credits/verify] Credits updated. New balance:', user.listing_credits);
     const obj = user.toObject(); obj.id = obj._id;
     res.json(obj);
-  } catch (e) { res.status(500).json({ error: e.message }); }
+  } catch (e) {
+    console.error('[credits/verify] Exception:', e.message);
+    res.status(500).json({ error: e.message });
+  }
 });
 
 module.exports = router;

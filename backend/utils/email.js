@@ -1,20 +1,7 @@
-const nodemailer = require('nodemailer');
+// Brevo HTTP API — bypasses SMTP entirely, works on Render.
+// Docs: https://developers.brevo.com/reference/sendtransacemail
 
-function createTransport() {
-  const port   = parseInt(process.env.SMTP_PORT || '587');
-  const secure = (port === 465);
-
-  return nodemailer.createTransport({
-    host: process.env.SMTP_HOST,
-    port,
-    secure,
-    auth: {
-      user: process.env.SMTP_USER,
-      pass: process.env.SMTP_PASS,
-    },
-    tls: { rejectUnauthorized: false },
-  });
-}
+const BREVO_API_URL = 'https://api.brevo.com/v3/smtp/email';
 
 function getBaseUrl() {
   const raw  = process.env.FRONTEND_URL || 'https://plazza.onrender.com';
@@ -22,22 +9,58 @@ function getBaseUrl() {
   return urls.find(u => u.startsWith('https://')) || urls[urls.length - 1];
 }
 
-const FROM = process.env.EMAIL_FROM || '"Plazza" <bhuszibah@gmail.com>';
+function parseSender(from) {
+  const match = from.match(/^"?([^"<]+)"?\s*<([^>]+)>/);
+  if (match) return { name: match[1].trim(), email: match[2].trim() };
+  return { email: from.trim() };
+}
+
+async function sendMail({ to, subject, html }) {
+  const sender = parseSender(process.env.EMAIL_FROM || '"Plazza" <bhuszibah@gmail.com>');
+
+  const res = await fetch(BREVO_API_URL, {
+    method: 'POST',
+    headers: {
+      'api-key':      process.env.BREVO_API_KEY,
+      'Content-Type': 'application/json',
+      'Accept':       'application/json',
+    },
+    body: JSON.stringify({
+      sender,
+      to: [{ email: to }],
+      subject,
+      htmlContent: html,
+    }),
+  });
+
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(`Brevo API error ${res.status}: ${err.message || JSON.stringify(err)}`);
+  }
+
+  return res.json();
+}
 
 async function verifyTransport() {
+  if (!process.env.BREVO_API_KEY) {
+    console.error('  ✗ EMAIL FAILED — BREVO_API_KEY is not set');
+    return;
+  }
   try {
-    await createTransport().verify();
-    console.log('  ✓ SMTP connection verified —', process.env.SMTP_USER);
+    const res = await fetch('https://api.brevo.com/v3/account', {
+      headers: { 'api-key': process.env.BREVO_API_KEY, 'Accept': 'application/json' },
+    });
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const account = await res.json();
+    console.log(`  ✓ Brevo ready — ${account.email}`);
   } catch (err) {
-    console.error('  ✗ SMTP FAILED —', err.message);
-    console.error('    host:', process.env.SMTP_HOST, '| port:', process.env.SMTP_PORT, '| user:', process.env.SMTP_USER);
+    console.error('  ✗ Brevo API check FAILED —', err.message);
   }
 }
 
 async function sendVerificationEmail(to, token) {
   const link = `${getBaseUrl()}/pages/auth.html?action=verify&token=${token}`;
-  await createTransport().sendMail({
-    from: FROM,
+  await sendMail({
     to,
     subject: 'Verify your Plazza email',
     html: `
@@ -60,8 +83,7 @@ async function sendVerificationEmail(to, token) {
 
 async function sendPasswordResetEmail(to, token) {
   const link = `${getBaseUrl()}/pages/auth.html?action=reset&token=${token}`;
-  await createTransport().sendMail({
-    from: FROM,
+  await sendMail({
     to,
     subject: 'Reset your Plazza password',
     html: `

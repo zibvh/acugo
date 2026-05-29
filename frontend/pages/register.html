@@ -95,10 +95,63 @@
     .id-type-grid { grid-template-columns: 1fr 1fr; }
     .reg-page { padding: 24px 16px 60px; }
   }
+
+  /* ── Email verification wall ── */
+  .email-wall {
+    min-height: 100vh; display: flex; align-items: center; justify-content: center;
+    padding: 32px 20px; background: var(--bg);
+  }
+  .email-wall-card {
+    max-width: 440px; width: 100%; text-align: center;
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: var(--radius-xl); padding: 48px 40px;
+  }
+  .email-wall-icon {
+    width: 72px; height: 72px; border-radius: 50%;
+    background: rgba(200,82,42,.1); display: flex; align-items: center;
+    justify-content: center; margin: 0 auto 24px; color: var(--accent);
+  }
+  .email-wall-title { font-family: var(--font-display); font-size: 28px; margin-bottom: 10px; letter-spacing: -0.5px; }
+  .email-wall-sub { font-size: 15px; color: var(--ink-3); line-height: 1.65; margin-bottom: 28px; }
+  .email-wall-sub strong { color: var(--ink); }
+  .email-wall-actions { display: flex; flex-direction: column; gap: 10px; }
+  .email-wall-note { font-size: 13px; color: var(--ink-3); margin-top: 20px; line-height: 1.5; }
 </style>
 </head>
 <body>
-<div class="reg-page">
+
+<!-- ── EMAIL VERIFICATION WALL (shown when email_verified is false) ── -->
+<div id="email-wall" style="display:none;">
+  <div class="email-wall">
+    <div class="email-wall-card">
+      <div class="email-wall-icon">
+        <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/>
+          <polyline points="22,6 12,13 2,6"/>
+        </svg>
+      </div>
+      <div class="email-wall-title">Check your inbox</div>
+      <div class="email-wall-sub" id="wall-sub-text">
+        We sent a verification link to <strong id="wall-email"></strong>.<br>
+        Click it to continue setting up your account.
+      </div>
+      <div class="email-wall-actions">
+        <button class="btn btn-primary btn-lg" id="wall-resend-btn" onclick="resendVerification()">
+          Resend verification email
+        </button>
+        <button class="btn btn-ghost btn-lg" onclick="wallCheckStatus()">
+          I've verified — continue
+        </button>
+      </div>
+      <div class="email-wall-note">
+        Check your spam folder if you don't see it within a minute.<br>
+        Wrong email? <a href="auth.html" style="color:var(--accent);">Sign up again</a>.
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="reg-page" id="reg-page">
   <div class="reg-header">
     <div class="reg-logo">Plaz<span>za</span></div>
     <div class="reg-steps" id="steps-display">
@@ -220,6 +273,49 @@
   const user = auth.getUser();
   if (user?.registration_complete) {
     window.location.href = user.role === 'seller' ? 'seller-dashboard.html' : 'buyer-dashboard.html';
+  }
+
+  // ── Email verification wall ────────────────────────────────────────────────
+  function showEmailWall() {
+    document.getElementById('email-wall').style.display = 'block';
+    document.getElementById('reg-page').style.display  = 'none';
+    const emailEl = document.getElementById('wall-email');
+    if (emailEl && user?.email) emailEl.textContent = user.email;
+  }
+
+  async function wallCheckStatus() {
+    try {
+      const fresh = await api.get('/auth/me');
+      auth.save(auth.getToken(), fresh);
+      if (fresh.email_verified) {
+        document.getElementById('email-wall').style.display = 'none';
+        document.getElementById('reg-page').style.display  = 'block';
+        toast('Email verified! Continue below.', 'success');
+      } else {
+        toast('Not verified yet — check your inbox.', 'error');
+      }
+    } catch (e) {
+      toast('Could not check status. Try again.', 'error');
+    }
+  }
+
+  async function resendVerification() {
+    const btn = document.getElementById('wall-resend-btn');
+    btn.disabled = true; btn.textContent = 'Sending…';
+    try {
+      await api.post('/auth/resend-verification', { email: user?.email }, false);
+      toast('Verification email sent! Check your inbox.', 'success');
+      btn.textContent = 'Resend verification email';
+      setTimeout(() => { btn.disabled = false; }, 30000); // 30s cooldown
+    } catch (e) {
+      toast(e.message || 'Failed to resend. Try again.', 'error');
+      btn.disabled = false; btn.textContent = 'Resend verification email';
+    }
+  }
+
+  // Show wall if email not yet verified
+  if (!user?.email_verified) {
+    showEmailWall();
   }
 
   // Init icons

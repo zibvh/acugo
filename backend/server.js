@@ -3,6 +3,7 @@ const express = require('express');
 const cors    = require('cors');
 const path    = require('path');
 const { connectDb } = require('./db/database');
+const { verifyTransport } = require('./utils/email');
 
 const app = express();
 
@@ -45,6 +46,7 @@ connectDb()
   .then(() => {
     app.listen(PORT, () => {
       console.log(`\n  Plazza running on http://localhost:${PORT}\n`);
+      verifyTransport(); // test SMTP on startup — result logged to console
     });
   })
   .catch(err => {

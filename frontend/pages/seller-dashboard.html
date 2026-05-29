@@ -84,6 +84,28 @@
     .listing-actions { width: 100%; justify-content: flex-end; }
     .banner-wrap { height: 120px; }
   }
+
+  /* ── Account status modals ── */
+  .status-modal-overlay {
+    position: fixed; inset: 0; background: rgba(0,0,0,.55);
+    display: flex; align-items: center; justify-content: center;
+    z-index: 9999; padding: 20px;
+  }
+  .status-modal {
+    background: var(--surface, #fff); border-radius: 16px;
+    padding: 32px 28px; max-width: 420px; width: 100%;
+    box-shadow: 0 20px 60px rgba(0,0,0,.25);
+    text-align: center;
+  }
+  .status-modal .sm-icon { font-size: 42px; margin-bottom: 12px; }
+  .status-modal h2 { margin: 0 0 8px; font-size: 20px; font-weight: 700; color: var(--ink,#1a1a1a); }
+  .status-modal p  { margin: 0 0 24px; font-size: 14px; color: var(--ink-3,#666); line-height: 1.6; }
+  .status-modal .sm-reason {
+    background: #fff8e1; border: 1.5px solid #f0c040;
+    border-radius: 10px; padding: 14px 16px;
+    font-size: 13px; color: #5a3e00; text-align: left;
+    margin-bottom: 24px; line-height: 1.5;
+  }
 </style>
 </head>
 <body>
@@ -288,13 +310,12 @@
         onSuccess: async (transaction) => {
           toast('Payment successful! Crediting account…', 'success');
           try {
-            await api.post('/auth/credits/verify', { reference: transaction.reference, credits: tier.credits });
-            const updated = await api.get('/auth/me');
+            const updated = await api.post('/auth/credits/verify', { reference: transaction.reference, credits: tier.credits });
             auth.save(auth.getToken(), updated);
             document.getElementById('credits-num').textContent = updated.listing_credits ?? 0;
             toast(tier.credits + ' credit' + (tier.credits > 1 ? 's' : '') + ' added!', 'success');
           } catch(e) {
-            toast('Payment received but refresh needed', 'error');
+            toast(e.message || 'Could not credit account — contact support', 'error');
           }
         },
         onCancel: () => { toast('Payment cancelled', 'default'); },
@@ -379,7 +400,47 @@
     try {
       await api.delete(`/listings/${id}`);
       toast('Listing deleted', 'success');
-      loadDashboard();
+    
+  // ── Account status gate ────────────────────────────────────────────────────
+  (async function checkAccountStatus() {
+    try {
+      const freshUser = await api.get('/auth/me');
+      auth.save(auth.getToken(), freshUser);
+
+      if (freshUser.account_status === 'suspended') {
+        document.body.innerHTML = `
+          <div class="status-modal-overlay">
+            <div class="status-modal">
+              <div class="sm-icon">🔒</div>
+              <h2>Account Suspended</h2>
+              <p>Your account has been suspended by an administrator. You cannot access the platform at this time.</p>
+              ${freshUser.suspend_reason ? `<div class="sm-reason"><strong>Reason:</strong> ${freshUser.suspend_reason}</div>` : ''}
+              <p style="font-size:13px;color:var(--ink-3)">If you believe this is a mistake, please contact support.</p>
+            </div>
+          </div>`;
+        return;
+      }
+
+      if (freshUser.account_status === 'warned' && !sessionStorage.getItem('warn_dismissed_' + freshUser._id)) {
+        const overlay = document.createElement('div');
+        overlay.className = 'status-modal-overlay';
+        overlay.innerHTML = `
+          <div class="status-modal">
+            <div class="sm-icon">⚠️</div>
+            <h2>Account Warning</h2>
+            <p>You have received a formal warning from the Plazza admin team. Continued violations may result in a suspension.</p>
+            ${freshUser.warn_reason ? `<div class="sm-reason"><strong>Reason:</strong> ${freshUser.warn_reason}</div>` : ''}
+            <button class="btn btn-primary" style="width:100%" onclick="
+              sessionStorage.setItem('warn_dismissed_${freshUser._id}', '1');
+              this.closest('.status-modal-overlay').remove();
+            ">I understand</button>
+          </div>`;
+        document.body.appendChild(overlay);
+      }
+    } catch(e) { /* silent — don't block dashboard if check fails */ }
+  })();
+
+  loadDashboard();
     } catch (e) { toast(e.message, 'error'); }
   }
 

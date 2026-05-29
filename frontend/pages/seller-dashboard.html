@@ -312,6 +312,14 @@
             auth.save(auth.getToken(), updated);
             document.getElementById('credits-num').textContent = updated.listing_credits ?? 0;
             toast(tier.credits + ' credit' + (tier.credits > 1 ? 's' : '') + ' added!', 'success');
+            // Re-fetch fresh user from server to ensure localStorage stays in sync
+            setTimeout(async () => {
+              try {
+                const freshUser = await api.get('/auth/me');
+                auth.save(auth.getToken(), freshUser);
+                document.getElementById('credits-num').textContent = freshUser.listing_credits ?? 0;
+              } catch (_) {}
+            }, 1500);
           } catch(e) {
             toast(e.message || 'Could not credit account — contact support', 'error');
           }

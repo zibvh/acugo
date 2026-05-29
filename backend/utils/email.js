@@ -1,37 +1,32 @@
 const nodemailer = require('nodemailer');
 
 function createTransport() {
-  const port = parseInt(process.env.SMTP_PORT || '587');
-  // port 465 = direct SSL; port 587 = STARTTLS (secure must be false)
+  const port   = parseInt(process.env.SMTP_PORT || '587');
   const secure = (port === 465);
 
   return nodemailer.createTransport({
-    host: process.env.SMTP_HOST || 'smtp.gmail.com',
+    host: process.env.SMTP_HOST,
     port,
     secure,
     auth: {
       user: process.env.SMTP_USER,
       pass: process.env.SMTP_PASS,
     },
-    // Prevents self-signed cert errors on some hosts
     tls: { rejectUnauthorized: false },
   });
 }
 
-// FRONTEND_URL may be comma-separated — always pick the https one
 function getBaseUrl() {
-  const raw = process.env.FRONTEND_URL || 'https://plazza.onrender.com';
+  const raw  = process.env.FRONTEND_URL || 'https://plazza.onrender.com';
   const urls = raw.split(',').map(u => u.trim()).filter(Boolean);
   return urls.find(u => u.startsWith('https://')) || urls[urls.length - 1];
 }
 
-const FROM = process.env.EMAIL_FROM || '"Plazza" <no-reply@plazza.onrender.com>';
+const FROM = process.env.EMAIL_FROM || '"Plazza" <bhuszibah@gmail.com>';
 
-// Called once at server startup to catch misconfigured SMTP early
 async function verifyTransport() {
   try {
-    const t = createTransport();
-    await t.verify();
+    await createTransport().verify();
     console.log('  ✓ SMTP connection verified —', process.env.SMTP_USER);
   } catch (err) {
     console.error('  ✗ SMTP FAILED —', err.message);

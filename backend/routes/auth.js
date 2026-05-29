@@ -97,10 +97,12 @@ router.post('/register', authLimiter, async (req, res) => {
       email_verify_expires:  verifyExpires,
     });
 
-    // Send verification email (non-blocking — don't fail registration if mail fails)
-    sendVerificationEmail(user.email, verifyToken).catch(err =>
-      console.error('[email] Failed to send verification email:', err.message)
-    );
+    // Send verification email — non-blocking so registration still succeeds,
+    // but errors are logged clearly so you can diagnose SMTP issues in Render logs
+    sendVerificationEmail(user.email, verifyToken).catch(err => {
+      console.error('[email] VERIFICATION EMAIL FAILED:', err.message);
+      console.error('[email] SMTP config — host:', process.env.SMTP_HOST, 'port:', process.env.SMTP_PORT, 'user:', process.env.SMTP_USER);
+    });
 
     res.json({
       token: signToken(user),
@@ -176,9 +178,10 @@ router.post('/resend-verification', authLimiter, async (req, res) => {
       $set: { email_verify_token: verifyToken, email_verify_expires: verifyExpires },
     });
 
-    sendVerificationEmail(user.email, verifyToken).catch(err =>
-      console.error('[email] Failed to resend verification email:', err.message)
-    );
+    sendVerificationEmail(user.email, verifyToken).catch(err => {
+      console.error('[email] RESEND VERIFICATION FAILED:', err.message);
+      console.error('[email] SMTP config — host:', process.env.SMTP_HOST, 'port:', process.env.SMTP_PORT, 'user:', process.env.SMTP_USER);
+    });
 
     res.json({ message: 'If that email is registered and unverified, a new link has been sent.' });
   } catch (e) { res.status(500).json({ error: e.message }); }
@@ -207,9 +210,10 @@ router.post('/forgot-password', forgotLimiter, async (req, res) => {
       },
     });
 
-    sendPasswordResetEmail(user.email, resetToken).catch(err =>
-      console.error('[email] Failed to send password reset email:', err.message)
-    );
+    sendPasswordResetEmail(user.email, resetToken).catch(err => {
+      console.error('[email] PASSWORD RESET EMAIL FAILED:', err.message);
+      console.error('[email] SMTP config — host:', process.env.SMTP_HOST, 'port:', process.env.SMTP_PORT, 'user:', process.env.SMTP_USER);
+    });
 
     res.json(genericMsg);
   } catch (e) { res.status(500).json({ error: e.message }); }

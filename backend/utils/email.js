@@ -1,26 +1,38 @@
 const nodemailer = require('nodemailer');
 
 function createTransport() {
-  // Supports any SMTP provider: Gmail, Resend, Brevo, Mailgun, etc.
-  // Set SMTP_HOST, SMTP_PORT, SMTP_USER, SMTP_PASS in your .env
-  // For Gmail, use an App Password (not your account password)
-  return nodemailer.createTransport({
-    host:   process.env.SMTP_HOST   || 'smtp.gmail.com',
-    port:   parseInt(process.env.SMTP_PORT || '587'),
-    secure: process.env.SMTP_SECURE === 'true', // true for port 465
+  const port   = parseInt(process.env.SMTP_PORT || '587');
+  const secure = port === 465; // only port 465 uses SSL from the start; 587 uses STARTTLS
+
+  const transporter = nodemailer.createTransport({
+    host:   process.env.SMTP_HOST || 'smtp.gmail.com',
+    port,
+    secure,
     auth: {
       user: process.env.SMTP_USER,
       pass: process.env.SMTP_PASS,
     },
   });
+
+  return transporter;
 }
 
-const FROM = process.env.EMAIL_FROM || `"Plazza" <no-reply@plazza.ng>`;
-const BASE_URL = process.env.FRONTEND_URL || 'https://plazza.ng';
+// FRONTEND_URL may be a comma-separated list (e.g. "http://localhost:3001, https://plazza.onrender.com")
+// Always use the production URL (last entry) for email links
+function getBaseUrl() {
+  const raw = process.env.FRONTEND_URL || 'https://plazza.onrender.com';
+  const urls = raw.split(',').map(u => u.trim()).filter(Boolean);
+  // Prefer https URL; fall back to last entry
+  return urls.find(u => u.startsWith('https://')) || urls[urls.length - 1];
+}
+
+const FROM = process.env.EMAIL_FROM || '"Plazza" <no-reply@plazza.onrender.com>';
 
 async function sendVerificationEmail(to, token) {
+  const BASE_URL = getBaseUrl();
   const link = `${BASE_URL}/pages/auth.html?action=verify&token=${token}`;
   const transporter = createTransport();
+
   await transporter.sendMail({
     from: FROM,
     to,
@@ -49,8 +61,10 @@ async function sendVerificationEmail(to, token) {
 }
 
 async function sendPasswordResetEmail(to, token) {
+  const BASE_URL = getBaseUrl();
   const link = `${BASE_URL}/pages/auth.html?action=reset&token=${token}`;
   const transporter = createTransport();
+
   await transporter.sendMail({
     from: FROM,
     to,

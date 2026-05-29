@@ -528,7 +528,7 @@ async function fetchUsers(page) {
             ${u.account_status !== 'suspended'
               ? `<button class="action-btn suspend" onclick="suspendUser('${u._id}','${escHtml(u.full_name)}')">Suspend</button>`
               : `<button class="action-btn restore" onclick="unsuspendUser('${u._id}','${escHtml(u.full_name)}')">Restore</button>`}
-            <button class="action-btn kick" onclick="kickUser('${u._id}','${escHtml(u.full_name)}')">Kick</button>
+            <button class="action-btn kick" onclick="kickUser('${u._id}','${escHtml(u.full_name)}')">Delete</button>
           </div>
         </td>
       </tr>`).join('');
@@ -669,7 +669,7 @@ function unsuspendUser(id, name) {
 function kickUser(id, name) {
   showModal({
     title: `Delete ${name}'s account?`,
-    sub: 'This permanently deletes the account, all listings, and conversations. This cannot be undone.',
+    sub: 'This permanently deletes the account, all their listings, and conversations. This cannot be undone.',
     noReason: true,
     confirmLabel: 'Yes, Delete Account',
     confirmClass: 'btn-primary',
@@ -684,13 +684,13 @@ function kickUser(id, name) {
   });
 }
 
-function deleteUser(id, name) { kickUser(id, name); }
+// Alias so Delete Account button in drawer also works
+window.deleteUser = (id, name) => kickUser(id, name);
 
 window.warnUser = warnUser;
 window.suspendUser = suspendUser;
 window.unsuspendUser = unsuspendUser;
 window.kickUser = kickUser;
-window.deleteUser = deleteUser;
 
 // ══════════════════════════════════════════════════════════════════════════════
 // LISTINGS

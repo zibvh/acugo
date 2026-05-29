@@ -139,24 +139,22 @@
 
   /* ── Account status modals ── */
   .status-modal-overlay {
-    position: fixed; inset: 0; background: rgba(0,0,0,.55);
+    position: fixed; inset: 0; background: rgba(0,0,0,.6);
     display: flex; align-items: center; justify-content: center;
     z-index: 9999; padding: 20px;
   }
   .status-modal {
-    background: var(--surface, #fff); border-radius: 16px;
+    background: #fff; border-radius: 16px;
     padding: 32px 28px; max-width: 420px; width: 100%;
-    box-shadow: 0 20px 60px rgba(0,0,0,.25);
-    text-align: center;
+    box-shadow: 0 20px 60px rgba(0,0,0,.25); text-align: center;
   }
   .status-modal .sm-icon { font-size: 42px; margin-bottom: 12px; }
-  .status-modal h2 { margin: 0 0 8px; font-size: 20px; font-weight: 700; color: var(--ink,#1a1a1a); }
-  .status-modal p  { margin: 0 0 24px; font-size: 14px; color: var(--ink-3,#666); line-height: 1.6; }
+  .status-modal h2 { margin: 0 0 8px; font-size: 20px; font-weight: 700; color: #1a1a1a; }
+  .status-modal p  { margin: 0 0 20px; font-size: 14px; color: #666; line-height: 1.6; }
   .status-modal .sm-reason {
-    background: #fff8e1; border: 1.5px solid #f0c040;
-    border-radius: 10px; padding: 14px 16px;
-    font-size: 13px; color: #5a3e00; text-align: left;
-    margin-bottom: 24px; line-height: 1.5;
+    background: #fff8e1; border: 1.5px solid #f0c040; border-radius: 10px;
+    padding: 14px 16px; font-size: 13px; color: #5a3e00;
+    text-align: left; margin-bottom: 20px; line-height: 1.5;
   }
 </style>
 </head>
@@ -533,6 +531,7 @@
     try {
       const freshUser = await api.get('/auth/me');
       auth.save(auth.getToken(), freshUser);
+      const uid = freshUser._id || freshUser.id;
 
       if (freshUser.account_status === 'suspended') {
         document.body.innerHTML = `
@@ -540,31 +539,35 @@
             <div class="status-modal">
               <div class="sm-icon">🔒</div>
               <h2>Account Suspended</h2>
-              <p>Your account has been suspended by an administrator. You cannot access the platform at this time.</p>
+              <p>Your account has been suspended by an administrator and you cannot access the platform.</p>
               ${freshUser.suspend_reason ? `<div class="sm-reason"><strong>Reason:</strong> ${freshUser.suspend_reason}</div>` : ''}
-              <p style="font-size:13px;color:var(--ink-3)">If you believe this is a mistake, please contact support.</p>
+              <p style="font-size:13px;color:#999">If you believe this is a mistake, please contact support.</p>
             </div>
           </div>`;
         return;
       }
 
-      if (freshUser.account_status === 'warned' && !sessionStorage.getItem('warn_dismissed_' + freshUser._id)) {
-        const overlay = document.createElement('div');
-        overlay.className = 'status-modal-overlay';
-        overlay.innerHTML = `
-          <div class="status-modal">
-            <div class="sm-icon">⚠️</div>
-            <h2>Account Warning</h2>
-            <p>You have received a formal warning from the Plazza admin team. Continued violations may result in a suspension.</p>
-            ${freshUser.warn_reason ? `<div class="sm-reason"><strong>Reason:</strong> ${freshUser.warn_reason}</div>` : ''}
-            <button class="btn btn-primary" style="width:100%" onclick="
-              sessionStorage.setItem('warn_dismissed_${freshUser._id}', '1');
-              this.closest('.status-modal-overlay').remove();
-            ">I understand</button>
-          </div>`;
-        document.body.appendChild(overlay);
+      if (freshUser.account_status === 'warned') {
+        const dismissKey = 'warn_dismissed_' + uid;
+        if (!sessionStorage.getItem(dismissKey)) {
+          const overlay = document.createElement('div');
+          overlay.className = 'status-modal-overlay';
+          overlay.innerHTML = `
+            <div class="status-modal">
+              <div class="sm-icon">⚠️</div>
+              <h2>Account Warning</h2>
+              <p>You have received a formal warning from the Plazza admin team. Further violations may result in suspension.</p>
+              ${freshUser.warn_reason ? `<div class="sm-reason"><strong>Reason:</strong> ${freshUser.warn_reason}</div>` : ''}
+              <button class="btn btn-primary" style="width:100%" id="warn-dismiss-btn">I understand</button>
+            </div>`;
+          document.body.appendChild(overlay);
+          document.getElementById('warn-dismiss-btn').onclick = function() {
+            sessionStorage.setItem(dismissKey, '1');
+            overlay.remove();
+          };
+        }
       }
-    } catch(e) { /* silent — don't block dashboard if check fails */ }
+    } catch(e) { /* don't block if check fails */ }
   })();
 
   loadProfile();

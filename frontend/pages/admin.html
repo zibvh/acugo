@@ -503,7 +503,7 @@ async function renderUsers(resetPage) {
         <option value="suspended" ${usersState.status==='suspended'?'selected':''}>Suspended</option>
       </select>
     </div>
-    <div class="admin-table-wrap">
+    <div class="admin-table-wrap" id="users-table-wrap">
       <table class="admin-table">
         <thead><tr>
           <th>Name</th><th>Email</th><th>Role</th><th>Status</th>
@@ -522,6 +522,19 @@ async function renderUsers(resetPage) {
   });
   document.getElementById('user-role-filter').addEventListener('change', e => { usersState.role = e.target.value; fetchUsers(1); });
   document.getElementById('user-status-filter').addEventListener('change', e => { usersState.status = e.target.value; fetchUsers(1); });
+
+  // Delegated listener on the stable wrapper — attached ONCE here, not inside fetchUsers.
+  // Survives tbody innerHTML replacements on pagination/filter changes.
+  document.getElementById('users-table-wrap').addEventListener('click', e => {
+    const btn = e.target.closest('.action-btn[data-action]');
+    if (!btn) return;
+    const { action, id, name } = btn.dataset;
+    if (action === 'view')    openUserDrawer(id);
+    if (action === 'warn')    warnUser(id, name);
+    if (action === 'suspend') suspendUser(id, name);
+    if (action === 'restore') unsuspendUser(id, name);
+    if (action === 'delete')  kickUser(id, name);
+  });
 
   fetchUsers(usersState.page);
 }
@@ -544,7 +557,6 @@ async function fetchUsers(page) {
       pgDiv.innerHTML = ''; return;
     }
 
-    // Render rows — NO inline onclick; use data-* attributes instead
     tbody.innerHTML = data.users.map(u => `
       <tr>
         <td class="name-cell">${escHtml(u.full_name)}</td>
@@ -565,18 +577,6 @@ async function fetchUsers(page) {
           </div>
         </td>
       </tr>`).join('');
-
-    // Single delegated listener on tbody — works regardless of CSP
-    tbody.addEventListener('click', e => {
-      const btn = e.target.closest('.action-btn[data-action]');
-      if (!btn) return;
-      const { action, id, name } = btn.dataset;
-      if (action === 'view')    openUserDrawer(id);
-      if (action === 'warn')    warnUser(id, name);
-      if (action === 'suspend') suspendUser(id, name);
-      if (action === 'restore') unsuspendUser(id, name);
-      if (action === 'delete')  kickUser(id, name);
-    });
 
     pgDiv.innerHTML = paginationHTML(data.page, data.pages, data.total);
     bindPagination('users-pagination', fetchUsers);
@@ -767,7 +767,7 @@ async function renderListings(resetPage) {
         <option value="deleted" ${listingsState.status==='deleted'?'selected':''}>Deleted</option>
       </select>
     </div>
-    <div class="admin-table-wrap">
+    <div class="admin-table-wrap" id="listings-table-wrap">
       <table class="admin-table">
         <thead><tr>
           <th>Title</th><th>Seller</th><th>Category</th><th>Price</th>
@@ -786,6 +786,16 @@ async function renderListings(resetPage) {
   });
   document.getElementById('listing-status-filter').addEventListener('change', e => {
     listingsState.status = e.target.value; fetchListings(1);
+  });
+
+  // Delegated listener on stable wrapper — attached ONCE, survives tbody replacements
+  document.getElementById('listings-table-wrap').addEventListener('click', e => {
+    const btn = e.target.closest('.action-btn[data-action]');
+    if (!btn) return;
+    const { action, id, title } = btn.dataset;
+    if (action === 'activate') setListingStatus(id, 'active');
+    if (action === 'pending')  setListingStatus(id, 'pending');
+    if (action === 'remove')   removeListingConfirm(id, title);
   });
 
   fetchListings(listingsState.page);
@@ -827,16 +837,6 @@ async function fetchListings(page) {
           </div>
         </td>
       </tr>`).join('');
-
-    // Delegated listener for listing action buttons
-    tbody.addEventListener('click', e => {
-      const btn = e.target.closest('.action-btn[data-action]');
-      if (!btn) return;
-      const { action, id, title } = btn.dataset;
-      if (action === 'activate') setListingStatus(id, 'active');
-      if (action === 'pending')  setListingStatus(id, 'pending');
-      if (action === 'remove')   removeListingConfirm(id, title);
-    });
 
     pgDiv.innerHTML = paginationHTML(data.page, data.pages, data.total);
     bindPagination('listings-pagination', fetchListings);

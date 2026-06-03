@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Listing — Plazza</title>
+<title>Listing — Bixcart</title>
 <link rel="stylesheet" href="../css/main.css">
 <style>
   .listing-layout { display: grid; grid-template-columns: 1fr 380px; gap: 36px; align-items: start; }
@@ -179,7 +179,7 @@
     const isSeller = user?.id === l.seller_id;
     const discount = l.original_price ? Math.round((1 - l.price / l.original_price) * 100) : 0;
 
-    document.title = `${l.title} — Plazza`;
+    document.title = `${l.title} — Bixcart`;
 
     const imgHTML = l.images?.length
       ? `<img src="${l.images[0]}" alt="${l.title}" id="main-img">`

@@ -414,7 +414,7 @@ h1,h2,h3,h4,h5 { line-height: 1.15; letter-spacing: -0.02em; }
 .truncate { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0,0,0,0); }
 
-/* ── MOBILE RESPONSIVE (Plazza) ── */
+/* ── MOBILE RESPONSIVE (Bixcart) ── */
 @media (max-width: 768px) {
   /* Nav */
   .nav { height: 56px; padding: 0 16px; }

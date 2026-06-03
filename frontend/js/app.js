@@ -264,14 +264,14 @@ function renderFooter() {
         <li><a href="/pages/auth.html">Sign in</a></li>
       </ul></div>
       <div class="footer-col"><h5>Company</h5><ul>
-        <li><a href="#">About Plazza</a></li>
+        <li><a href="#">About Bixcart</a></li>
         <li><a href="#">Safety tips</a></li>
         <li><a href="#">Privacy policy</a></li>
         <li><a href="#">Terms of use</a></li>
       </ul></div>
     </div>
     <div class="footer-bottom">
-      <span>© 2026 Plazza — Ajayi Crowther University, Oyo, Nigeria</span>
+      <span>© 2026 Bixcart — Ajayi Crowther University, Oyo, Nigeria</span>
       <span>Made for students, by students.</span>
     </div>
   </div>`;

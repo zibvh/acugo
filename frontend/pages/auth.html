@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Sign in — Plazza</title>
+<title>Sign in — Bixcart</title>
 <link rel="stylesheet" href="../css/main.css">
 <style>
   .auth-page {
@@ -138,7 +138,7 @@
       <!-- ── LOGIN VIEW ── -->
       <div id="login-view">
         <div class="auth-form-title">Welcome back</div>
-        <div class="auth-form-sub">Sign in to your Plazza account</div>
+        <div class="auth-form-sub">Sign in to your Bixcart account</div>
         <form class="auth-form" id="login-form">
           <div class="form-group">
             <label class="form-label">Email address</label>
@@ -166,7 +166,7 @@
 
       <!-- ── REGISTER VIEW ── -->
       <div id="register-view" style="display:none">
-        <div class="auth-form-title">Join Plazza</div>
+        <div class="auth-form-title">Join Bixcart</div>
         <div class="auth-form-sub">Ajayi Crowther University · Oyo, Nigeria</div>
         <form class="auth-form" id="register-form">
           <div class="form-row">
@@ -303,7 +303,7 @@
             <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
           </div>
           <div class="success-title">Email verified!</div>
-          <div class="success-sub">Your email address has been confirmed. Welcome to Plazza!</div>
+          <div class="success-sub">Your email address has been confirmed. Welcome to Bixcart!</div>
           <button class="btn btn-primary btn-lg w-full" onclick="showLogin()">Sign in</button>
         </div>
       </div>
@@ -466,7 +466,7 @@
         role: selectedRole,
       }, false);
       auth.save(data.token, data.user);
-      toast('Welcome to Plazza! Check your email to verify your account.', 'success');
+      toast('Welcome to Bixcart! Check your email to verify your account.', 'success');
       setTimeout(() => window.location.href = 'register.html', 900);
     } catch (err) {
       toast(err.message, 'error');

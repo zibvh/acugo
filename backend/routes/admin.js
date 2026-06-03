@@ -1,6 +1,6 @@
 const express = require('express');
 const router  = express.Router();
-const { User, Listing, Conversation, Message, Order } = require('../db/database');
+const { User, Listing, Conversation, Message, Order, ConversationReport } = require('../db/database');
 const { adminMiddleware } = require('../middleware/auth');
 
 // All admin routes require admin role
@@ -14,7 +14,7 @@ router.get('/stats', async (req, res) => {
       totalUsers, buyers, sellers,
       activeListings, totalListings,
       totalConversations, totalMessages,
-      totalOrders, suspendedUsers, warnedUsers,
+      totalOrders, suspendedUsers, warnedUsers, pendingReports,
     ] = await Promise.all([
       User.countDocuments({ role: { $ne: 'admin' } }),
       User.countDocuments({ role: 'buyer' }),
@@ -26,12 +26,13 @@ router.get('/stats', async (req, res) => {
       Order.countDocuments(),
       User.countDocuments({ account_status: 'suspended' }),
       User.countDocuments({ account_status: 'warned' }),
+      ConversationReport.countDocuments({ status: 'pending' }),
     ]);
     res.json({
       totalUsers, buyers, sellers,
       activeListings, totalListings,
       totalConversations, totalMessages,
-      totalOrders, suspendedUsers, warnedUsers,
+      totalOrders, suspendedUsers, warnedUsers, pendingReports,
     });
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
@@ -217,22 +218,38 @@ router.delete('/listings/:id', async (req, res) => {
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
-// ── MESSAGES ──────────────────────────────────────────────────────────────────
-// GET /api/admin/conversations?q=&page=&limit=
+// ── REPORTED CONVERSATIONS ────────────────────────────────────────────────────
+// GET /api/admin/conversations?status=pending|resolved|all&page=&limit=
 router.get('/conversations', async (req, res) => {
   try {
-    const { page = 1, limit = 20 } = req.query;
-    const skip  = (parseInt(page) - 1) * parseInt(limit);
-    const total = await Conversation.countDocuments();
-    const convs = await Conversation.find()
+    const { status = 'pending', page = 1, limit = 20 } = req.query;
+    const skip = (parseInt(page) - 1) * parseInt(limit);
+
+    const reportFilter = {};
+    if (status && status !== 'all') reportFilter.status = status;
+
+    const total   = await ConversationReport.countDocuments(reportFilter);
+    const reports = await ConversationReport.find(reportFilter)
+      .populate('reporter_id', 'full_name email')
+      .populate('fault_user_id', 'full_name')
+      .sort({ created_at: -1 })
+      .skip(skip).limit(parseInt(limit)).lean();
+
+    // Attach conversation details
+    const convIds = reports.map(r => r.conversation_id);
+    const convs = await Conversation.find({ _id: { $in: convIds } })
       .populate('buyer_id',   'full_name email account_status')
       .populate('seller_id',  'full_name email account_status')
       .populate('listing_id', 'title status')
-      .sort({ last_message_at: -1 })
-      .skip(skip).limit(parseInt(limit)).lean();
+      .lean();
+    const convMap = Object.fromEntries(convs.map(c => [String(c._id), c]));
 
     res.json({
-      conversations: convs.map(c => ({ ...c, id: c._id })),
+      conversations: reports.map(r => ({
+        ...r,
+        id: r._id,
+        conversation: convMap[String(r.conversation_id)] || null,
+      })),
       total,
       page: parseInt(page),
       pages: Math.ceil(total / parseInt(limit)),
@@ -240,27 +257,61 @@ router.get('/conversations', async (req, res) => {
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
-// GET /api/admin/conversations/:id — full message thread
+// GET /api/admin/conversations/:id — full thread (by report id OR conversation id)
 router.get('/conversations/:id', async (req, res) => {
   try {
-    const conv = await Conversation.findById(req.params.id)
-      .populate('buyer_id',   'full_name email')
-      .populate('seller_id',  'full_name email')
-      .populate('listing_id', 'title status price').lean();
+    // Try to find a report first; fall back to treating id as a conversation id
+    let conv, report = null;
+    report = await ConversationReport.findById(req.params.id)
+      .populate('reporter_id', 'full_name email')
+      .populate('fault_user_id', 'full_name email')
+      .lean().catch(() => null);
+
+    if (report) {
+      conv = await Conversation.findById(report.conversation_id)
+        .populate('buyer_id',   'full_name email')
+        .populate('seller_id',  'full_name email')
+        .populate('listing_id', 'title status price').lean();
+    } else {
+      conv = await Conversation.findById(req.params.id)
+        .populate('buyer_id',   'full_name email')
+        .populate('seller_id',  'full_name email')
+        .populate('listing_id', 'title status price').lean();
+    }
     if (!conv) return res.status(404).json({ error: 'Conversation not found' });
 
-    const messages = await Message.find({ conversation_id: req.params.id })
+    const messages = await Message.find({ conversation_id: conv._id })
       .populate('sender_id', 'full_name role')
       .sort({ created_at: 1 }).lean();
 
     res.json({
       conversation: { ...conv, id: conv._id },
+      report: report ? { ...report, id: report._id } : null,
       messages: messages.map(m => ({
         ...m, id: m._id,
         sender_name: m.sender_id?.full_name,
         sender_role: m.sender_id?.role,
       })),
     });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// POST /api/admin/conversations/:reportId/resolve
+router.post('/conversations/:reportId/resolve', async (req, res) => {
+  try {
+    const { fault_user_id, admin_note } = req.body;
+    // fault_user_id can be null (no one at fault) or a valid user id
+    const update = {
+      status: 'resolved',
+      fault_user_id: fault_user_id || null,
+      admin_note: admin_note?.trim() || '',
+      resolved_at: new Date(),
+    };
+    const report = await ConversationReport.findByIdAndUpdate(
+      req.params.reportId, { $set: update }, { new: true }
+    ).lean();
+    if (!report) return res.status(404).json({ error: 'Report not found' });
+    res.json({ ...report, id: report._id });
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 

@@ -205,6 +205,12 @@
   .conv-participants { font-size: 13px; font-weight: 600; color: var(--ink); margin-bottom: 3px; }
   .conv-snippet { font-size: 12px; color: var(--ink-3); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .conv-meta { font-size: 11px; color: var(--ink-3); margin-top: 4px; }
+  .report-badge {
+    display: inline-block; font-size: 10px; font-weight: 700; padding: 2px 7px;
+    border-radius: 20px; text-transform: uppercase; letter-spacing: .05em;
+  }
+  .report-badge.pending  { background: #fff3cd; color: #856404; }
+  .report-badge.resolved { background: #d1e7dd; color: #0f5132; }
 
   .msg-thread { padding: 16px; display: flex; flex-direction: column; gap: 10px; }
   .msg-bubble-wrap { display: flex; flex-direction: column; }
@@ -224,6 +230,33 @@
   .msg-panel-header { padding: 14px 18px; border-bottom: 1.5px solid var(--border); background: var(--surface); position: sticky; top: 0; z-index: 1; }
   .msg-panel-header h4 { margin: 0 0 2px; font-size: 14px; font-weight: 700; }
   .msg-panel-header p { margin: 0; font-size: 12px; color: var(--ink-3); }
+
+  /* Report detail card */
+  .report-detail-card {
+    margin: 14px 18px; padding: 14px 16px;
+    background: var(--surface); border: 1.5px solid var(--border); border-radius: var(--radius-md);
+  }
+  .report-detail-card .rdc-title { font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: .06em; color: var(--ink-3); margin-bottom: 8px; }
+  .report-detail-card .rdc-row { font-size: 13px; margin-bottom: 5px; }
+  .report-detail-card .rdc-label { color: var(--ink-3); font-size: 11px; }
+
+  /* Fault decision */
+  .fault-section {
+    margin: 0 18px 18px; padding: 14px 16px;
+    background: var(--surface); border: 1.5px solid var(--border); border-radius: var(--radius-md);
+  }
+  .fault-section .fs-title { font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: .06em; color: var(--ink-3); margin-bottom: 12px; }
+  .fault-select { width: 100%; padding: 8px 10px; border: 1.5px solid var(--border); border-radius: var(--radius-sm); font-family: var(--font-body); font-size: 13px; background: var(--bg); color: var(--ink); outline: none; margin-bottom: 10px; }
+  .fault-note-ta { width: 100%; padding: 8px 10px; border: 1.5px solid var(--border); border-radius: var(--radius-sm); font-family: var(--font-body); font-size: 13px; background: var(--bg); color: var(--ink); resize: vertical; min-height: 60px; outline: none; box-sizing: border-box; margin-bottom: 10px; }
+  .fault-select:focus, .fault-note-ta:focus { border-color: var(--ink); }
+
+  /* Filter tabs */
+  .report-filter-tabs { display: flex; gap: 0; border-bottom: 1.5px solid var(--border); }
+  .report-filter-tab {
+    padding: 9px 14px; font-size: 12px; font-weight: 600; cursor: pointer;
+    border-bottom: 2px solid transparent; color: var(--ink-3); transition: color .15s, border-color .15s;
+  }
+  .report-filter-tab.active { color: var(--ink); border-bottom-color: var(--ink); }
 
   /* ── Empty state ── */
   .admin-empty { text-align: center; padding: 48px 20px; color: var(--ink-3); font-size: 14px; }
@@ -265,8 +298,8 @@
       Listings
     </button>
     <button class="admin-nav-item" data-tab="messages">
-      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
-      Messages
+      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+      Reports
     </button>
   </nav>
 </aside>
@@ -334,7 +367,7 @@ api.patch = (path, body) => api.request('PATCH', path, body, true);
 function adminLogout() { adminAuth.clear(); window.location.replace('admin-login.html'); }
 
 // ── Tab routing ─────────────────────────────────────────────────────────────
-const TABS = { overview: 'Overview', users: 'Users', listings: 'Listings', messages: 'Messages' };
+const TABS = { overview: 'Overview', users: 'Users', listings: 'Listings', messages: 'Reports' };
 let currentTab = 'overview';
 
 document.querySelectorAll('.admin-nav-item[data-tab]').forEach(btn => {
@@ -466,13 +499,13 @@ async function renderOverview() {
         <div class="stat-card"><div class="stat-card-label">Active Listings</div><div class="stat-card-value">${s.activeListings}</div><div class="stat-card-sub">${s.totalListings} total</div></div>
         <div class="stat-card"><div class="stat-card-label">Conversations</div><div class="stat-card-value">${s.totalConversations}</div><div class="stat-card-sub">${s.totalMessages} messages</div></div>
         <div class="stat-card"><div class="stat-card-label">Orders</div><div class="stat-card-value">${s.totalOrders}</div></div>
-        <div class="stat-card warn"><div class="stat-card-label">Warned</div><div class="stat-card-value">${s.warnedUsers}</div><div class="stat-card-sub">users with warnings</div></div>
+        <div class="stat-card ${s.pendingReports > 0 ? 'warn' : ''}"><div class="stat-card-label">Pending Reports</div><div class="stat-card-value">${s.pendingReports || 0}</div><div class="stat-card-sub">conversations reported</div></div>
         <div class="stat-card danger"><div class="stat-card-label">Suspended</div><div class="stat-card-value">${s.suspendedUsers}</div><div class="stat-card-sub">accounts suspended</div></div>
       </div>
       <div style="display:flex;gap:12px;flex-wrap:wrap;">
         <button class="btn btn-surface" data-goto="users">Manage Users →</button>
         <button class="btn btn-surface" data-goto="listings">Manage Listings →</button>
-        <button class="btn btn-surface" data-goto="messages">View Messages →</button>
+        <button class="btn btn-surface" data-goto="messages">View Reports →</button>
       </div>`;
     c.querySelectorAll('.btn[data-goto]').forEach(btn => {
       btn.addEventListener('click', () => switchTab(btn.dataset.goto));
@@ -883,46 +916,71 @@ async function renderMessages() {
     <div class="admin-table-wrap" style="overflow:hidden">
       <div class="msg-layout">
         <div class="msg-list" id="msg-conv-list">
-          <div style="padding:12px 16px;border-bottom:1.5px solid var(--border);font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:var(--ink-3)">Conversations</div>
-          <div id="conv-list-inner">${skeletonRows(3, 6).replace(/<tr[^>]*>|<\/tr>/g,'').replace(/<td[^>]*>/g,'<div style="padding:14px 16px;border-bottom:1px solid var(--border)">').replace(/<\/td>/g,'</div>').replace(/<div class="skeleton"[^>]*>/g,'<div class="skeleton" style="height:12px;margin-bottom:6px">').replace(/<\/div><div class="skeleton"/g,'</div><div class="skeleton" style="height:10px;width:60%"')}</div>
+          <div style="padding:12px 16px;border-bottom:1.5px solid var(--border);">
+            <div style="font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:var(--ink-3);margin-bottom:10px;">Reported Conversations</div>
+            <div class="report-filter-tabs" id="report-filter-tabs">
+              <div class="report-filter-tab active" data-status="pending">Pending</div>
+              <div class="report-filter-tab" data-status="resolved">Resolved</div>
+              <div class="report-filter-tab" data-status="all">All</div>
+            </div>
+          </div>
+          <div id="conv-list-inner"></div>
           <div id="conv-list-pg"></div>
         </div>
         <div class="msg-panel" id="msg-thread-panel">
-          <div class="msg-panel-empty">Select a conversation to read messages</div>
+          <div class="msg-panel-empty">Select a report to review the conversation</div>
         </div>
       </div>
     </div>`;
-  fetchConversations(1);
+
+  // Filter tab switching
+  document.getElementById('report-filter-tabs').addEventListener('click', e => {
+    const tab = e.target.closest('.report-filter-tab');
+    if (!tab) return;
+    document.querySelectorAll('.report-filter-tab').forEach(t => t.classList.remove('active'));
+    tab.classList.add('active');
+    msgsState.selectedConvId = null;
+    document.getElementById('msg-thread-panel').innerHTML = '<div class="msg-panel-empty">Select a report to review the conversation</div>';
+    fetchConversations(1, tab.dataset.status);
+  });
+
+  fetchConversations(1, 'pending');
 }
 
-async function fetchConversations(page) {
+async function fetchConversations(page, statusFilter = 'pending') {
   msgsState.page = page;
   const inner = document.getElementById('conv-list-inner');
   const pgDiv = document.getElementById('conv-list-pg');
   if (!inner) return;
   try {
-    const data = await api.get(`/admin/conversations?page=${page}&limit=30`);
+    const data = await api.get(`/admin/conversations?page=${page}&limit=30&status=${statusFilter}`);
     if (!data.conversations.length) {
-      inner.innerHTML = '<div style="padding:24px;text-align:center;color:var(--ink-3);font-size:13px">No conversations</div>';
+      inner.innerHTML = `<div style="padding:24px;text-align:center;color:var(--ink-3);font-size:13px">No ${statusFilter === 'all' ? '' : statusFilter + ' '}reports</div>`;
       pgDiv.innerHTML = ''; return;
     }
 
-    inner.innerHTML = data.conversations.map(conv => `
-      <div class="conv-list-item ${msgsState.selectedConvId === String(conv._id) ? 'active' : ''}"
-           data-conv-id="${conv._id}">
-        <div class="conv-participants">${escHtml(conv.buyer_id?.full_name || '?')} ↔ ${escHtml(conv.seller_id?.full_name || '?')}</div>
-        <div class="conv-snippet">${escHtml(conv.last_message || 'No messages yet')}</div>
-        <div class="conv-meta">${conv.listing_id?.title ? `Re: ${escHtml(conv.listing_id.title)} · ` : ''}${fmtTime(conv.last_message_at)}</div>
-      </div>`).join('');
+    inner.innerHTML = data.conversations.map(r => {
+      const cv  = r.conversation || {};
+      const buyer  = cv.buyer_id?.full_name  || '?';
+      const seller = cv.seller_id?.full_name || '?';
+      return `
+        <div class="conv-list-item ${msgsState.selectedConvId === String(r._id) ? 'active' : ''}"
+             data-conv-id="${r._id}">
+          <div style="display:flex;align-items:center;justify-content:space-between;gap:6px;margin-bottom:3px;">
+            <div class="conv-participants">${escHtml(buyer)} ↔ ${escHtml(seller)}</div>
+            <span class="report-badge ${r.status}">${r.status}</span>
+          </div>
+          <div class="conv-snippet" style="color:var(--ink);font-style:italic;">"${escHtml(r.reason)}"</div>
+          <div class="conv-meta">Reported by ${escHtml(r.reporter_id?.full_name || 'Unknown')} · ${fmtTime(r.created_at)}</div>
+        </div>`;
+    }).join('');
 
-    // Delegated click on conversation list
     inner.addEventListener('click', e => {
       const item = e.target.closest('.conv-list-item[data-conv-id]');
       if (!item) return;
       openConversation(item.dataset.convId);
     });
 
-    // Pagination for conversation list
     pgDiv.innerHTML = data.pages > 1
       ? `<div style="display:flex;gap:6px;padding:10px 12px;border-top:1.5px solid var(--border)">
           <button class="pg-btn" data-page="${page-1}" ${page===1?'disabled':''}>←</button>
@@ -935,7 +993,8 @@ async function fetchConversations(page) {
         const btn = e.target.closest('.pg-btn');
         if (!btn || btn.disabled) return;
         const p = parseInt(btn.dataset.page, 10);
-        if (!isNaN(p)) fetchConversations(p);
+        const activeTab = document.querySelector('.report-filter-tab.active')?.dataset.status || 'pending';
+        if (!isNaN(p)) fetchConversations(p, activeTab);
       });
     }
   } catch(e) {
@@ -944,25 +1003,43 @@ async function fetchConversations(page) {
 }
 window.fetchConversations = fetchConversations;
 
-async function openConversation(id) {
-  msgsState.selectedConvId = id;
+async function openConversation(reportId) {
+  msgsState.selectedConvId = reportId;
   document.querySelectorAll('.conv-list-item').forEach(el => {
-    el.classList.toggle('active', el.dataset.convId === String(id));
+    el.classList.toggle('active', el.dataset.convId === String(reportId));
   });
   const panel = document.getElementById('msg-thread-panel');
   if (!panel) return;
   panel.innerHTML = '<div class="msg-panel-empty">Loading…</div>';
   try {
-    const data = await api.get(`/admin/conversations/${id}`);
-    const { conversation: cv, messages } = data;
+    const data = await api.get(`/admin/conversations/${reportId}`);
+    const { conversation: cv, report, messages } = data;
     const buyerName  = cv.buyer_id?.full_name  || 'Buyer';
     const sellerName = cv.seller_id?.full_name || 'Seller';
     const buyerId    = String(cv.buyer_id?._id  || cv.buyer_id);
+    const isResolved = report?.status === 'resolved';
+
     panel.innerHTML = `
       <div class="msg-panel-header">
         <h4>${escHtml(buyerName)} ↔ ${escHtml(sellerName)}</h4>
-        <p>${cv.listing_id?.title ? `Re: "${escHtml(cv.listing_id.title)}" · ${formatPrice(cv.listing_id.price)}` : 'General conversation'} · ${messages.length} messages</p>
+        <p>${cv.listing_id?.title ? `Re: "${escHtml(cv.listing_id.title)}" · ` : ''}${messages.length} messages${isResolved ? ' · <span style="color:#0f5132;font-weight:600;">Resolved</span>' : ''}</p>
       </div>
+
+      ${report ? `
+      <div class="report-detail-card">
+        <div class="rdc-title">Report Details</div>
+        <div class="rdc-row"><span class="rdc-label">Reported by: </span><strong>${escHtml(report.reporter_id?.full_name || 'Unknown')}</strong> (${escHtml(report.reporter_id?.email || '')})</div>
+        <div class="rdc-row"><span class="rdc-label">Reason: </span>${escHtml(report.reason)}</div>
+        <div class="rdc-row"><span class="rdc-label">Reported: </span>${fmtTime(report.created_at)}</div>
+        ${isResolved ? `
+          <div class="rdc-row" style="margin-top:8px;padding-top:8px;border-top:1px solid var(--border);">
+            <span class="rdc-label">User at fault: </span>
+            <strong>${escHtml(report.fault_user_id?.full_name || 'None')}</strong>
+          </div>
+          ${report.admin_note ? `<div class="rdc-row"><span class="rdc-label">Admin note: </span>${escHtml(report.admin_note)}</div>` : ''}
+        ` : ''}
+      </div>` : ''}
+
       <div class="msg-thread" id="msg-thread">
         ${messages.length ? messages.map(m => {
           const isbuyer = String(m.sender_id) === buyerId || m.sender_role === 'buyer';
@@ -973,9 +1050,50 @@ async function openConversation(id) {
               <div class="msg-time">${fmtTime(m.created_at)}</div>
             </div>`;
         }).join('') : '<div style="text-align:center;color:var(--ink-3);font-size:13px;padding:24px">No messages yet</div>'}
-      </div>`;
+      </div>
+
+      ${report && !isResolved ? `
+      <div class="fault-section" id="fault-section">
+        <div class="fs-title">Decide User at Fault</div>
+        <label style="font-size:12px;color:var(--ink-3);display:block;margin-bottom:4px;">Who is at fault?</label>
+        <select class="fault-select" id="fault-select">
+          <option value="">No one (dismiss report)</option>
+          <option value="${cv.buyer_id?._id || cv.buyer_id}">${escHtml(buyerName)} (Buyer)</option>
+          <option value="${cv.seller_id?._id || cv.seller_id}">${escHtml(sellerName)} (Seller)</option>
+        </select>
+        <label style="font-size:12px;color:var(--ink-3);display:block;margin-bottom:4px;">Admin note (optional)</label>
+        <textarea class="fault-note-ta" id="fault-note" placeholder="Add a note about your decision…"></textarea>
+        <div style="display:flex;gap:8px;justify-content:flex-end;">
+          <button class="btn btn-primary btn-sm" id="resolve-btn">Resolve Report</button>
+        </div>
+      </div>` : ''}`;
+
     const thread = document.getElementById('msg-thread');
-    if (thread) thread.scrollIntoView({ block: 'end' });
+    if (thread) thread.scrollTop = thread.scrollHeight;
+
+    const resolveBtn = document.getElementById('resolve-btn');
+    if (resolveBtn) {
+      resolveBtn.addEventListener('click', async () => {
+        const fault  = document.getElementById('fault-select')?.value || null;
+        const note   = document.getElementById('fault-note')?.value?.trim() || '';
+        resolveBtn.disabled = true;
+        resolveBtn.textContent = 'Resolving…';
+        try {
+          await api.post(`/admin/conversations/${reportId}/resolve`, {
+            fault_user_id: fault || null,
+            admin_note: note,
+          });
+          toast('Report resolved.', 'success');
+          const activeStatus = document.querySelector('.report-filter-tab.active')?.dataset.status || 'pending';
+          fetchConversations(msgsState.page || 1, activeStatus);
+          openConversation(reportId);
+        } catch(e) {
+          toast(e.message, 'error');
+          resolveBtn.disabled = false;
+          resolveBtn.textContent = 'Resolve Report';
+        }
+      });
+    }
   } catch(e) {
     if (panel) panel.innerHTML = `<div class="msg-panel-empty" style="color:var(--red,#e53e3e)">${e.message}</div>`;
   }

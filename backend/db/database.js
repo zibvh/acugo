@@ -87,6 +87,19 @@ const messageSchema = new mongoose.Schema({
 messageSchema.index({ conversation_id: 1 });
 messageSchema.index({ receiver_id: 1, is_read: 1 });
 
+const conversationReportSchema = new mongoose.Schema({
+  conversation_id: { type: mongoose.Schema.Types.ObjectId, ref: 'Conversation', required: true },
+  reporter_id:     { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
+  reason:          { type: String, required: true, trim: true },
+  status:          { type: String, enum: ['pending', 'resolved'], default: 'pending' },
+  fault_user_id:   { type: mongoose.Schema.Types.ObjectId, ref: 'User', default: null },
+  admin_note:      { type: String, default: '' },
+  resolved_at:     { type: Date, default: null },
+}, { timestamps: { createdAt: 'created_at', updatedAt: false } });
+
+conversationReportSchema.index({ conversation_id: 1 });
+conversationReportSchema.index({ status: 1 });
+
 const orderSchema = new mongoose.Schema({
   listing_id:      { type: mongoose.Schema.Types.ObjectId, ref: 'Listing', required: true },
   buyer_id:        { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
@@ -100,12 +113,13 @@ const orderSchema = new mongoose.Schema({
 orderSchema.index({ buyer_id: 1 });
 orderSchema.index({ seller_id: 1 });
 
-const User         = mongoose.model('User',         userSchema);
-const Listing      = mongoose.model('Listing',      listingSchema);
-const SavedListing = mongoose.model('SavedListing', savedListingSchema);
-const Conversation = mongoose.model('Conversation', conversationSchema);
-const Message      = mongoose.model('Message',      messageSchema);
-const Order        = mongoose.model('Order',        orderSchema);
+const User               = mongoose.model('User',               userSchema);
+const Listing            = mongoose.model('Listing',            listingSchema);
+const SavedListing       = mongoose.model('SavedListing',       savedListingSchema);
+const Conversation       = mongoose.model('Conversation',       conversationSchema);
+const Message            = mongoose.model('Message',            messageSchema);
+const ConversationReport = mongoose.model('ConversationReport', conversationReportSchema);
+const Order              = mongoose.model('Order',              orderSchema);
 
 async function connectDb() {
   const uri = process.env.MONGODB_URI;
@@ -114,4 +128,4 @@ async function connectDb() {
   console.log('  MongoDB connected:', mongoose.connection.host);
 }
 
-module.exports = { connectDb, User, Listing, SavedListing, Conversation, Message, Order };
+module.exports = { connectDb, User, Listing, SavedListing, Conversation, Message, ConversationReport, Order };

@@ -1,7 +1,7 @@
 {
-  "name": "plazza-backend",
+  "name": "bixcart-backend",
   "version": "1.0.0",
-  "description": "Plazza API \u2014 ACU Campus Marketplace",
+  "description": "Bixcart API \u2014 ACU Campus Marketplace",
   "main": "server.js",
   "scripts": {
     "start": "node server.js",

@@ -30,7 +30,7 @@ router.post('/image', authMiddleware, upload.single('image'), async (req, res) =
     const result = await new Promise((resolve, reject) => {
       const stream = cloudinary.uploader.upload_stream(
         {
-          folder:    'plazza/listings',
+          folder:    'bixcart/listings',
           public_id: `${req.user.id}_${Date.now()}`,
           transformation: [
             { width: 1200, height: 1200, crop: 'limit', quality: 'auto:good', fetch_format: 'auto' }

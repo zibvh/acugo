@@ -45,7 +45,7 @@ const PORT = process.env.PORT || 3001;
 connectDb()
   .then(() => {
     app.listen(PORT, () => {
-      console.log(`\n  Plazza running on http://localhost:${PORT}\n`);
+      console.log(`\n  Bixcart running on http://localhost:${PORT}\n`);
       verifyTransport(); // test SMTP on startup — result logged to console
     });
   })

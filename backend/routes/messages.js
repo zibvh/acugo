@@ -1,6 +1,6 @@
 const express = require('express');
 const router  = express.Router();
-const { Conversation, Message, Listing, User } = require('../db/database');
+const { Conversation, Message, Listing, User, ConversationReport } = require('../db/database');
 const { authMiddleware } = require('../middleware/auth');
 const { notifyUser } = require('../db/push');
 
@@ -135,6 +135,39 @@ router.post('/send', authMiddleware, async (req, res) => {
       message: { ...populated, id: populated._id, sender_name: populated.sender_id?.full_name },
       conversation_id: convDoc._id,
     });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// POST /api/messages/report
+router.post('/report', authMiddleware, async (req, res) => {
+  try {
+    const uid = req.user.id;
+    const { conversation_id, reason } = req.body;
+    if (!conversation_id) return res.status(400).json({ error: 'conversation_id is required' });
+    if (!reason?.trim()) return res.status(400).json({ error: 'Reason is required' });
+
+    // Verify the reporter is actually part of this conversation
+    const conv = await Conversation.findOne({
+      _id: conversation_id,
+      $or: [{ buyer_id: uid }, { seller_id: uid }],
+    });
+    if (!conv) return res.status(404).json({ error: 'Conversation not found' });
+
+    // Prevent duplicate pending reports from same user
+    const existing = await ConversationReport.findOne({
+      conversation_id: conv._id,
+      reporter_id: uid,
+      status: 'pending',
+    });
+    if (existing) return res.status(409).json({ error: 'You have already reported this conversation' });
+
+    const report = await ConversationReport.create({
+      conversation_id: conv._id,
+      reporter_id: uid,
+      reason: reason.trim(),
+    });
+
+    res.json({ success: true, report_id: report._id });
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 

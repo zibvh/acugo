@@ -1,8 +1,5 @@
-/**
- * AI Content Moderation — Bixcart
- * Uses Google Gemini 1.5 Flash (FREE tier: 1,500 req/day, 1M tokens/day)
- * Get your free key at: https://aistudio.google.com/app/apikey
- */
+
+const fetch = require('node-fetch'); 
 
 const SYSTEM_PROMPT = `You are a strict content moderation AI for Bixcart — an online marketplace exclusively for students of Ajayi Crowther University (ACU), Oyo, Nigeria.
 
@@ -58,6 +55,11 @@ async function moderateListing(data) {
 
 async function callGemini(prompt) {
   try {
+    if (!process.env.GEMINI_API_KEY) {
+      console.log('[aiMod] GEMINI_API_KEY not set — skipping moderation');
+      return safe();
+    }
+    console.log('[aiMod] Calling Gemini…');
     const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${process.env.GEMINI_API_KEY}`;
     const res = await fetch(url, {
       method: 'POST',
@@ -67,10 +69,15 @@ async function callGemini(prompt) {
         generationConfig: { maxOutputTokens: 150, temperature: 0.1 },
       }),
     });
-    if (!res.ok) { console.warn('[aiMod] Gemini error:', res.status); return safe(); }
+    if (!res.ok) {
+      const errText = await res.text();
+      console.warn('[aiMod] Gemini error:', res.status, errText.slice(0, 200));
+      return safe();
+    }
     const data   = await res.json();
     const text   = data.candidates?.[0]?.content?.parts?.[0]?.text?.trim() || '{}';
     const clean  = text.replace(/^```json|^```|```$/gm, '').trim();
+    console.log('[aiMod] Response:', clean);
     const parsed = JSON.parse(clean);
     return { flagged: Boolean(parsed.flagged), reason: parsed.reason || '', category: parsed.category || '' };
   } catch (e) {

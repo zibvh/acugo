@@ -76,12 +76,14 @@ conversationSchema.index({ buyer_id: 1 });
 conversationSchema.index({ seller_id: 1 });
 
 const messageSchema = new mongoose.Schema({
-  conversation_id: { type: mongoose.Schema.Types.ObjectId, ref: 'Conversation', required: true },
-  sender_id:       { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
-  receiver_id:     { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
-  listing_id:      { type: mongoose.Schema.Types.ObjectId, ref: 'Listing', default: null },
-  content:         { type: String, required: true },
-  is_read:         { type: Boolean, default: false },
+  conversation_id:      { type: mongoose.Schema.Types.ObjectId, ref: 'Conversation', required: true },
+  sender_id:            { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
+  receiver_id:          { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
+  listing_id:           { type: mongoose.Schema.Types.ObjectId, ref: 'Listing', default: null },
+  content:              { type: String, required: true },
+  is_read:              { type: Boolean, default: false },
+  is_admin_notification:{ type: Boolean, default: false },
+  notification_to:      { type: mongoose.Schema.Types.ObjectId, ref: 'User', default: null },
 }, { timestamps: { createdAt: 'created_at', updatedAt: false } });
 
 messageSchema.index({ conversation_id: 1 });

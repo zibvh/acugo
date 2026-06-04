@@ -86,9 +86,39 @@
     background: var(--surface-2); display: flex; align-items: center; justify-content: center;
   }
   .thread-header {
-    padding: 14px 18px; border-bottom: 1.5px solid var(--border);
-    display: flex; align-items: center; gap: 12px; flex-shrink: 0;
+    padding: 10px 14px; border-bottom: 1.5px solid var(--border);
+    display: flex; align-items: center; gap: 10px; flex-shrink: 0;
+    min-width: 0; overflow: hidden;
   }
+  .thread-header-name { font-size: 14px; font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .thread-header-sub  { font-size: 11px; color: var(--ink-3); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .thread-header-actions { display: flex; gap: 6px; flex-shrink: 0; margin-left: auto; align-items: center; }
+  .t-report-btn {
+    display: flex; align-items: center; gap: 4px; padding: 5px 10px;
+    border-radius: var(--radius-md); border: 1.5px solid #fca5a5;
+    background: #fff5f5; color: #9b2c2c; font-size: 12px; font-weight: 600;
+    cursor: pointer; transition: background .12s; flex-shrink: 0;
+  }
+  .t-report-btn:hover { background: #fed7d7; }
+  .t-report-label { display: inline; }
+  @media (max-width: 500px) { .t-report-label { display: none; } }
+
+  /* Admin notification message */
+  .admin-notif-wrap {
+    display: flex; justify-content: center; padding: 2px 0;
+  }
+  .admin-notif-bubble {
+    background: linear-gradient(135deg, #667eea15, #764ba215);
+    border: 1.5px solid #a78bfa55;
+    border-radius: 12px; padding: 10px 14px; max-width: 85%;
+    text-align: center;
+  }
+  .admin-notif-label {
+    font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: .08em;
+    color: #7c3aed; margin-bottom: 5px; display: flex; align-items: center; justify-content: center; gap: 5px;
+  }
+  .admin-notif-text  { font-size: 13px; color: var(--ink); line-height: 1.5; }
+  .admin-notif-time  { font-size: 10px; color: var(--ink-3); margin-top: 5px; }
   .mobile-back-btn {
     display: none; background: none; border: none;
     cursor: pointer; color: var(--ink); padding: 4px; margin-right: 2px; flex-shrink: 0;
@@ -330,16 +360,18 @@ function buildThreadHTML(conv, otherName) {
       <button class="mobile-back-btn" id="t-back" aria-label="Back">
         <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
       </button>
-      <div class="avatar avatar-md">${getInitials(otherName)}</div>
+      <div class="avatar avatar-md" style="flex-shrink:0;">${getInitials(otherName)}</div>
       <div style="flex:1;min-width:0;">
-        <div style="font-size:15px;font-weight:700;">${otherName}</div>
-        <div style="font-size:11px;color:var(--ink-3);">${conv?.listing_title ? 'Re: ' + conv.listing_title : ''}</div>
+        <div class="thread-header-name">${otherName}</div>
+        <div class="thread-header-sub">${conv?.listing_title ? 'Re: ' + conv.listing_title : 'Direct message'}</div>
       </div>
-      ${conv?.listing_id ? `<a href="listing.html?id=${conv.listing_id}" class="btn btn-ghost btn-sm" style="display:flex;gap:5px;">${icons.eye} Listing</a>` : ''}
-      <button class="btn btn-ghost btn-sm" id="t-report" title="Report conversation" style="color:var(--red,#e53e3e);gap:5px;display:flex;align-items:center;">
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z"/><line x1="4" y1="22" x2="4" y2="15"/></svg>
-        Report
-      </button>
+      <div class="thread-header-actions">
+        ${conv?.listing_id ? `<a href="listing.html?id=${conv.listing_id}" class="btn btn-ghost btn-sm" style="display:flex;gap:4px;padding:5px 9px;font-size:12px;">${icons.eye}<span class="t-report-label">Listing</span></a>` : ''}
+        <button class="t-report-btn" id="t-report" title="Report conversation">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z"/><line x1="4" y1="22" x2="4" y2="15"/></svg>
+          <span class="t-report-label">Report</span>
+        </button>
+      </div>
     </div>
     ${conv?.listing_title ? `
     <div class="thread-listing-bar" onclick="window.location.href='/pages/listing.html?id=${conv.listing_id}'">
@@ -404,12 +436,27 @@ async function fetchThread(id, silent = false) {
 
     let lastDate = null;
     msgsEl.innerHTML = data.messages.map(m => {
-      const mine = m.sender_id === me.id;
       const d = new Date(m.created_at);
       const dateStr = d.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
       const timeStr = d.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
       let sep = '';
       if (dateStr !== lastDate) { sep = `<div class="date-sep"><span>${dateStr}</span></div>`; lastDate = dateStr; }
+
+      if (m.is_admin_notification) {
+        return `${sep}
+          <div class="admin-notif-wrap">
+            <div class="admin-notif-bubble">
+              <div class="admin-notif-label">
+                <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+                Admin Notice
+              </div>
+              <div class="admin-notif-text">${escHtml(m.content)}</div>
+              <div class="admin-notif-time">${timeStr}</div>
+            </div>
+          </div>`;
+      }
+
+      const mine = m.sender_id === me.id;
       return `${sep}
         <div class="msg-wrap ${mine ? 'mine' : ''}">
           ${!mine ? `<div class="avatar" style="width:26px;height:26px;font-size:10px;flex-shrink:0;align-self:flex-end;">${getInitials(m.sender_name)}</div>` : ''}

@@ -265,15 +265,109 @@
   /* ── Loading skeleton ── */
   .tbl-skeleton td { padding: 14px 16px; }
 
-  /* ── Responsive ── */
-  @media (max-width: 900px) {
-    .admin-sidebar { display: none; }
-    .msg-layout { grid-template-columns: 1fr; }
-    .msg-list { display: none; }
+  /* ══════════════════════════════════════════════
+     RESPONSIVE — mobile-first admin
+  ══════════════════════════════════════════════ */
+  .mob-nav-toggle {
+    display: none; background: none; border: none; cursor: pointer;
+    color: white; padding: 8px; border-radius: 6px;
   }
+  .mob-nav-toggle:hover { background: rgba(255,255,255,.12); }
+  .sidebar-overlay {
+    display: none; position: fixed; inset: 0; background: rgba(0,0,0,.4); z-index: 1099;
+  }
+  .sidebar-overlay.open { display: block; }
+
+  @media (max-width: 900px) {
+    body { overflow: auto; }
+    .admin-sidebar {
+      position: fixed; left: -240px; top: 0; z-index: 1100;
+      transition: left .22s ease; height: 100vh;
+    }
+    .admin-sidebar.open { left: 0; }
+    .admin-main { width: 100%; height: auto; overflow: visible; }
+    .admin-content { padding: 16px; overflow: visible; }
+    .admin-topbar { padding: 0 16px; }
+    .mob-nav-toggle { display: flex; align-items: center; justify-content: center; }
+    .admin-topbar-title { font-size: 14px; }
+    .stat-grid { grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 10px; margin-bottom: 20px; }
+    .stat-card { padding: 14px 16px; }
+    .stat-card-value { font-size: 22px; }
+  }
+
+  /* Tables — horizontal scroll on small screens */
+  @media (max-width: 768px) {
+    .admin-table-wrap { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+    .admin-table { min-width: 620px; }
+    .admin-table th, .admin-table td { padding: 10px 12px; }
+    .admin-toolbar { flex-wrap: wrap; }
+    .admin-search { min-width: 100%; }
+    /* Reports layout: stack list above thread panel */
+    .msg-layout {
+      grid-template-columns: 1fr;
+      height: auto;
+    }
+    .msg-list {
+      border-right: none;
+      border-bottom: 1.5px solid var(--border);
+      max-height: 280px;
+      overflow-y: auto;
+    }
+    .msg-panel {
+      min-height: 400px;
+    }
+    /* Drawer full-width */
+    .drawer { width: 100%; max-width: 100%; }
+  }
+
+  @media (max-width: 520px) {
+    .admin-table { min-width: 480px; }
+    .action-btns { flex-wrap: wrap; }
+    .stat-grid { grid-template-columns: 1fr 1fr; }
+    .admin-content { padding: 12px; }
+  }
+
+  /* Notify panel */
+  .notify-grid {
+    display: grid; grid-template-columns: 1fr 1fr; gap: 12px;
+    margin: 0 18px 16px;
+  }
+  @media (max-width: 600px) { .notify-grid { grid-template-columns: 1fr; } }
+  .notify-card {
+    background: var(--surface); border: 1.5px solid var(--border); border-radius: var(--radius-md);
+    padding: 14px 15px;
+  }
+  .notify-card .nc-title {
+    font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .06em;
+    color: var(--ink-3); margin-bottom: 8px; display: flex; align-items: center; gap: 6px;
+  }
+  .notify-card .nc-name { font-size: 13px; font-weight: 600; color: var(--ink); margin-bottom: 8px; }
+  .notify-ta {
+    width: 100%; padding: 8px 10px; border: 1.5px solid var(--border);
+    border-radius: var(--radius-sm); font-family: var(--font-body); font-size: 13px;
+    background: var(--bg); color: var(--ink); resize: vertical; min-height: 70px;
+    outline: none; box-sizing: border-box; margin-bottom: 8px;
+  }
+  .notify-ta:focus { border-color: #7c3aed; }
+  .notify-actions { display: flex; gap: 6px; flex-wrap: wrap; }
+  .nc-send-btn {
+    font-size: 12px; font-weight: 600; padding: 5px 12px;
+    border-radius: var(--radius-md); border: none; cursor: pointer;
+    background: #7c3aed; color: white; transition: background .12s;
+  }
+  .nc-send-btn:hover { background: #6d28d9; }
+  .nc-send-btn:disabled { opacity: .5; cursor: not-allowed; }
+  .nc-warn-btn  { font-size: 12px; font-weight: 600; padding: 5px 10px; border-radius: var(--radius-md); border: 1.5px solid #d69e2e; background: #fffff0; color: #744210; cursor: pointer; }
+  .nc-warn-btn:hover  { background: #fefcbf; }
+  .nc-susp-btn  { font-size: 12px; font-weight: 600; padding: 5px 10px; border-radius: var(--radius-md); border: 1.5px solid #e53e3e; background: #fff5f5; color: #9b2c2c; cursor: pointer; }
+  .nc-susp-btn:hover  { background: #fed7d7; }
+  .nc-rest-btn  { font-size: 12px; font-weight: 600; padding: 5px 10px; border-radius: var(--radius-md); border: 1.5px solid #38a169; background: #f0fff4; color: #276749; cursor: pointer; }
+  .nc-rest-btn:hover  { background: #c6f6d5; }
 </style>
 </head>
 <body>
+
+<div class="sidebar-overlay" id="sidebar-overlay"></div>
 
 <!-- SIDEBAR -->
 <aside class="admin-sidebar">
@@ -307,6 +401,9 @@
 <!-- MAIN -->
 <div class="admin-main">
   <div class="admin-topbar">
+    <button class="mob-nav-toggle" id="mob-nav-toggle" aria-label="Open menu">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
+    </button>
     <div class="admin-topbar-title" id="topbar-title">Overview</div>
     <div class="admin-topbar-right">
       <span class="admin-badge" id="admin-user-badge">Admin</span>
@@ -372,6 +469,18 @@ let currentTab = 'overview';
 
 document.querySelectorAll('.admin-nav-item[data-tab]').forEach(btn => {
   btn.addEventListener('click', () => switchTab(btn.dataset.tab));
+});
+
+// ── Mobile sidebar toggle ────────────────────────────────────────────────────
+const sidebar  = document.querySelector('.admin-sidebar');
+const overlay  = document.getElementById('sidebar-overlay');
+function openSidebar()  { sidebar.classList.add('open');  overlay.classList.add('open'); }
+function closeSidebar() { sidebar.classList.remove('open'); overlay.classList.remove('open'); }
+document.getElementById('mob-nav-toggle').addEventListener('click', openSidebar);
+overlay.addEventListener('click', closeSidebar);
+// Close sidebar when a nav item is tapped on mobile
+document.querySelectorAll('.admin-nav-item[data-tab]').forEach(btn => {
+  btn.addEventListener('click', closeSidebar);
 });
 
 // Sign-out button
@@ -1017,83 +1126,182 @@ async function openConversation(reportId) {
     const buyerName  = cv.buyer_id?.full_name  || 'Buyer';
     const sellerName = cv.seller_id?.full_name || 'Seller';
     const buyerId    = String(cv.buyer_id?._id  || cv.buyer_id);
+    const sellerId   = String(cv.seller_id?._id || cv.seller_id);
     const isResolved = report?.status === 'resolved';
+
+    const buyerStatus  = cv.buyer_id?.account_status  || 'active';
+    const sellerStatus = cv.seller_id?.account_status || 'active';
+
+    // Render admin notification messages differently
+    const threadHTML = messages.length ? messages.map(m => {
+      if (m.is_admin_notification) {
+        return `<div style="display:flex;justify-content:center;padding:6px 0;">
+          <div style="background:linear-gradient(135deg,#667eea18,#764ba218);border:1.5px solid #a78bfa55;border-radius:10px;padding:9px 14px;max-width:82%;text-align:center;">
+            <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:#7c3aed;margin-bottom:4px;">📣 Admin Notice</div>
+            <div style="font-size:13px;color:var(--ink);line-height:1.5">${escHtml(m.content)}</div>
+            <div style="font-size:10px;color:var(--ink-3);margin-top:4px">${fmtTime(m.created_at)}</div>
+          </div></div>`;
+      }
+      const isbuyer = String(m.sender_id?._id || m.sender_id) === buyerId || m.sender_role === 'buyer';
+      return `<div class="msg-bubble-wrap ${isbuyer ? 'left' : 'right'}">
+        <div class="msg-sender-label">${escHtml(m.sender_name || 'Unknown')} <span style="opacity:.7">(${escHtml(m.sender_role || '?')})</span></div>
+        <div class="msg-bubble">${escHtml(m.content)}</div>
+        <div class="msg-time">${fmtTime(m.created_at)}</div>
+      </div>`;
+    }).join('') : '<div style="text-align:center;color:var(--ink-3);font-size:13px;padding:24px">No messages yet</div>';
 
     panel.innerHTML = `
       <div class="msg-panel-header">
         <h4>${escHtml(buyerName)} ↔ ${escHtml(sellerName)}</h4>
-        <p>${cv.listing_id?.title ? `Re: "${escHtml(cv.listing_id.title)}" · ` : ''}${messages.length} messages${isResolved ? ' · <span style="color:#0f5132;font-weight:600;">Resolved</span>' : ''}</p>
+        <p>${cv.listing_id?.title ? `Re: "${escHtml(cv.listing_id.title)}" · ` : ''}${messages.length} messages${isResolved ? ' · <span style="color:#0f5132;font-weight:600">✓ Resolved</span>' : ' · <span style="color:#d69e2e;font-weight:600">Pending</span>'}</p>
       </div>
 
-      ${report ? `
-      <div class="report-detail-card">
-        <div class="rdc-title">Report Details</div>
-        <div class="rdc-row"><span class="rdc-label">Reported by: </span><strong>${escHtml(report.reporter_id?.full_name || 'Unknown')}</strong> (${escHtml(report.reporter_id?.email || '')})</div>
-        <div class="rdc-row"><span class="rdc-label">Reason: </span>${escHtml(report.reason)}</div>
-        <div class="rdc-row"><span class="rdc-label">Reported: </span>${fmtTime(report.created_at)}</div>
-        ${isResolved ? `
-          <div class="rdc-row" style="margin-top:8px;padding-top:8px;border-top:1px solid var(--border);">
-            <span class="rdc-label">User at fault: </span>
-            <strong>${escHtml(report.fault_user_id?.full_name || 'None')}</strong>
-          </div>
-          ${report.admin_note ? `<div class="rdc-row"><span class="rdc-label">Admin note: </span>${escHtml(report.admin_note)}</div>` : ''}
-        ` : ''}
+      ${report ? `<div class="report-detail-card">
+        <div class="rdc-title">Report</div>
+        <div class="rdc-row"><span class="rdc-label">Reported by </span><strong>${escHtml(report.reporter_id?.full_name || 'Unknown')}</strong> · ${fmtTime(report.created_at)}</div>
+        <div class="rdc-row" style="margin-top:5px;padding:9px 11px;background:var(--bg);border-radius:8px;font-style:italic;color:var(--ink);font-size:13px">"${escHtml(report.reason)}"</div>
+        ${isResolved ? `<div class="rdc-row" style="margin-top:8px;padding-top:8px;border-top:1px solid var(--border)">
+          <span class="rdc-label">Decided fault: </span><strong>${escHtml(report.fault_user_id?.full_name || 'None')}</strong>
+          ${report.admin_note ? ` · <span style="color:var(--ink-3)">${escHtml(report.admin_note)}</span>` : ''}
+        </div>` : ''}
       </div>` : ''}
 
-      <div class="msg-thread" id="msg-thread">
-        ${messages.length ? messages.map(m => {
-          const isbuyer = String(m.sender_id) === buyerId || m.sender_role === 'buyer';
-          return `
-            <div class="msg-bubble-wrap ${isbuyer ? 'left' : 'right'}">
-              <div class="msg-sender-label">${escHtml(m.sender_name || 'Unknown')} (${escHtml(m.sender_role || '?')})</div>
-              <div class="msg-bubble">${escHtml(m.content)}</div>
-              <div class="msg-time">${fmtTime(m.created_at)}</div>
-            </div>`;
-        }).join('') : '<div style="text-align:center;color:var(--ink-3);font-size:13px;padding:24px">No messages yet</div>'}
-      </div>
+      <div class="msg-thread" id="msg-thread">${threadHTML}</div>
 
       ${report && !isResolved ? `
       <div class="fault-section" id="fault-section">
-        <div class="fs-title">Decide User at Fault</div>
-        <label style="font-size:12px;color:var(--ink-3);display:block;margin-bottom:4px;">Who is at fault?</label>
+        <div class="fs-title">⚖️ Decide &amp; Resolve</div>
+        <label style="font-size:12px;color:var(--ink-3);display:block;margin-bottom:4px">Who is at fault?</label>
         <select class="fault-select" id="fault-select">
-          <option value="">No one (dismiss report)</option>
-          <option value="${cv.buyer_id?._id || cv.buyer_id}">${escHtml(buyerName)} (Buyer)</option>
-          <option value="${cv.seller_id?._id || cv.seller_id}">${escHtml(sellerName)} (Seller)</option>
+          <option value="">No one — dismiss report</option>
+          <option value="${buyerId}">${escHtml(buyerName)} (Buyer)</option>
+          <option value="${sellerId}">${escHtml(sellerName)} (Seller)</option>
         </select>
-        <label style="font-size:12px;color:var(--ink-3);display:block;margin-bottom:4px;">Admin note (optional)</label>
-        <textarea class="fault-note-ta" id="fault-note" placeholder="Add a note about your decision…"></textarea>
-        <div style="display:flex;gap:8px;justify-content:flex-end;">
-          <button class="btn btn-primary btn-sm" id="resolve-btn">Resolve Report</button>
+        <label style="font-size:12px;color:var(--ink-3);display:block;margin-bottom:4px">Admin note (optional)</label>
+        <textarea class="fault-note-ta" id="fault-note" placeholder="e.g. Buyer initiated scam attempt…"></textarea>
+        <div style="display:flex;gap:8px;justify-content:flex-end">
+          <button class="btn btn-primary btn-sm" id="resolve-btn" style="background:#059669;border-color:#059669">✓ Resolve Report</button>
         </div>
-      </div>` : ''}`;
+      </div>
 
+      <div style="padding:4px 18px 8px;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:var(--ink-3)">Notify Users Separately</div>
+      <div class="notify-grid">
+        <div class="notify-card" id="notify-buyer-card">
+          <div class="nc-title">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+            Buyer
+          </div>
+          <div class="nc-name">${escHtml(buyerName)}</div>
+          <textarea class="notify-ta" id="notify-ta-buyer" placeholder="e.g. Your report has been reviewed. Action will be taken against the seller."></textarea>
+          <div class="notify-actions">
+            <button class="nc-send-btn" id="notify-send-buyer">Send Notice</button>
+            ${buyerStatus !== 'suspended'
+              ? `<button class="nc-warn-btn"  data-uid="${buyerId}" data-uname="${escHtml(buyerName)}" data-action="warn">⚠ Warn</button>
+                 <button class="nc-susp-btn"  data-uid="${buyerId}" data-uname="${escHtml(buyerName)}" data-action="suspend">🔒 Suspend</button>`
+              : `<button class="nc-rest-btn"  data-uid="${buyerId}" data-uname="${escHtml(buyerName)}" data-action="restore">✅ Restore</button>`}
+          </div>
+        </div>
+        <div class="notify-card" id="notify-seller-card">
+          <div class="nc-title">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+            Seller
+          </div>
+          <div class="nc-name">${escHtml(sellerName)}</div>
+          <textarea class="notify-ta" id="notify-ta-seller" placeholder="e.g. You have been reported. Your account is under review."></textarea>
+          <div class="notify-actions">
+            <button class="nc-send-btn" id="notify-send-seller">Send Notice</button>
+            ${sellerStatus !== 'suspended'
+              ? `<button class="nc-warn-btn"  data-uid="${sellerId}" data-uname="${escHtml(sellerName)}" data-action="warn">⚠ Warn</button>
+                 <button class="nc-susp-btn"  data-uid="${sellerId}" data-uname="${escHtml(sellerName)}" data-action="suspend">🔒 Suspend</button>`
+              : `<button class="nc-rest-btn"  data-uid="${sellerId}" data-uname="${escHtml(sellerName)}" data-action="restore">✅ Restore</button>`}
+          </div>
+        </div>
+      </div>` : `
+      <div style="padding:4px 18px 8px;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:var(--ink-3)">Notify Users</div>
+      <div class="notify-grid">
+        <div class="notify-card">
+          <div class="nc-title">Buyer</div>
+          <div class="nc-name">${escHtml(buyerName)}</div>
+          <textarea class="notify-ta" id="notify-ta-buyer" placeholder="Send an update to the buyer…"></textarea>
+          <div class="notify-actions">
+            <button class="nc-send-btn" id="notify-send-buyer">Send Notice</button>
+            ${buyerStatus !== 'suspended'
+              ? `<button class="nc-warn-btn"  data-uid="${buyerId}" data-uname="${escHtml(buyerName)}" data-action="warn">⚠ Warn</button>
+                 <button class="nc-susp-btn"  data-uid="${buyerId}" data-uname="${escHtml(buyerName)}" data-action="suspend">🔒 Suspend</button>`
+              : `<button class="nc-rest-btn"  data-uid="${buyerId}" data-uname="${escHtml(buyerName)}" data-action="restore">✅ Restore</button>`}
+          </div>
+        </div>
+        <div class="notify-card">
+          <div class="nc-title">Seller</div>
+          <div class="nc-name">${escHtml(sellerName)}</div>
+          <textarea class="notify-ta" id="notify-ta-seller" placeholder="Send an update to the seller…"></textarea>
+          <div class="notify-actions">
+            <button class="nc-send-btn" id="notify-send-seller">Send Notice</button>
+            ${sellerStatus !== 'suspended'
+              ? `<button class="nc-warn-btn"  data-uid="${sellerId}" data-uname="${escHtml(sellerName)}" data-action="warn">⚠ Warn</button>
+                 <button class="nc-susp-btn"  data-uid="${sellerId}" data-uname="${escHtml(sellerName)}" data-action="suspend">🔒 Suspend</button>`
+              : `<button class="nc-rest-btn"  data-uid="${sellerId}" data-uname="${escHtml(sellerName)}" data-action="restore">✅ Restore</button>`}
+          </div>
+        </div>
+      </div>`}`;
+
+    // Scroll thread to bottom
     const thread = document.getElementById('msg-thread');
     if (thread) thread.scrollTop = thread.scrollHeight;
 
+    // ── Resolve button ───────────────────────────────────────────────────────
     const resolveBtn = document.getElementById('resolve-btn');
     if (resolveBtn) {
       resolveBtn.addEventListener('click', async () => {
-        const fault  = document.getElementById('fault-select')?.value || null;
-        const note   = document.getElementById('fault-note')?.value?.trim() || '';
-        resolveBtn.disabled = true;
-        resolveBtn.textContent = 'Resolving…';
+        const fault = document.getElementById('fault-select')?.value || null;
+        const note  = document.getElementById('fault-note')?.value?.trim() || '';
+        resolveBtn.disabled = true; resolveBtn.textContent = 'Resolving…';
         try {
-          await api.post(`/admin/conversations/${reportId}/resolve`, {
-            fault_user_id: fault || null,
-            admin_note: note,
-          });
+          await api.post(`/admin/conversations/${reportId}/resolve`, { fault_user_id: fault || null, admin_note: note });
           toast('Report resolved.', 'success');
           const activeStatus = document.querySelector('.report-filter-tab.active')?.dataset.status || 'pending';
           fetchConversations(msgsState.page || 1, activeStatus);
           openConversation(reportId);
         } catch(e) {
           toast(e.message, 'error');
-          resolveBtn.disabled = false;
-          resolveBtn.textContent = 'Resolve Report';
+          resolveBtn.disabled = false; resolveBtn.textContent = '✓ Resolve Report';
         }
       });
     }
+
+    // ── Notify send buttons ──────────────────────────────────────────────────
+    async function handleNotify(userId, taId, btnId) {
+      const ta  = document.getElementById(taId);
+      const btn = document.getElementById(btnId);
+      if (!ta || !btn) return;
+      const msg = ta.value.trim();
+      if (!msg) { ta.focus(); ta.style.borderColor = 'var(--red,#e53e3e)'; return; }
+      ta.style.borderColor = '';
+      btn.disabled = true; btn.textContent = 'Sending…';
+      try {
+        await api.post(`/admin/conversations/${reportId}/notify`, { user_id: userId, message: msg });
+        ta.value = '';
+        toast('Notice sent — it will appear in their conversation.', 'success');
+        openConversation(reportId); // refresh to show the new message
+      } catch(e) {
+        toast(e.message, 'error');
+        btn.disabled = false; btn.textContent = 'Send Notice';
+      }
+    }
+
+    document.getElementById('notify-send-buyer')?.addEventListener('click',  () => handleNotify(buyerId,  'notify-ta-buyer',  'notify-send-buyer'));
+    document.getElementById('notify-send-seller')?.addEventListener('click', () => handleNotify(sellerId, 'notify-ta-seller', 'notify-send-seller'));
+
+    // ── Inline user action buttons (warn/suspend/restore) ───────────────────
+    panel.addEventListener('click', e => {
+      const btn = e.target.closest('[data-action][data-uid]');
+      if (!btn) return;
+      const { uid, uname, action } = btn.dataset;
+      if (action === 'warn')    warnUser(uid, uname);
+      if (action === 'suspend') suspendUser(uid, uname);
+      if (action === 'restore') unsuspendUser(uid, uname);
+    });
+
   } catch(e) {
     if (panel) panel.innerHTML = `<div class="msg-panel-empty" style="color:var(--red,#e53e3e)">${e.message}</div>`;
   }

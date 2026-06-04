@@ -175,7 +175,7 @@ function renderNav(activePage = '') {
   `;
 
   navEl.innerHTML = `
-    <a href="/" class="nav-logo">Plaz<span>za</span></a>
+    <a href="/" class="nav-logo">Bix<span>cart</span></a>
     <ul class="nav-links">${linksHTML}</ul>
     <div class="nav-spacer"></div>
     <div class="nav-actions">${authHTML}</div>
@@ -248,7 +248,7 @@ function renderFooter() {
   <div class="container">
     <div class="footer-grid">
       <div class="footer-brand">
-        <div class="footer-brand-logo">Plaz<span>za</span></div>
+        <div class="footer-brand-logo">Bix<span>cart</span></div>
         <p>The campus marketplace built for Ajayi Crowther University students. Buy, sell, connect.</p>
       </div>
       <div class="footer-col"><h5>Marketplace</h5><ul>

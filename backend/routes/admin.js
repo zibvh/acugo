@@ -315,4 +315,47 @@ router.post('/conversations/:reportId/resolve', async (req, res) => {
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
+// POST /api/admin/conversations/:reportId/notify — send notification message to one user
+router.post('/conversations/:reportId/notify', async (req, res) => {
+  try {
+    const { user_id, message } = req.body;
+    if (!message?.trim()) return res.status(400).json({ error: 'Message is required' });
+    if (!user_id) return res.status(400).json({ error: 'user_id is required' });
+
+    const report = await ConversationReport.findById(req.params.reportId).lean();
+    if (!report) return res.status(404).json({ error: 'Report not found' });
+
+    const conv = await Conversation.findById(report.conversation_id).lean();
+    if (!conv) return res.status(404).json({ error: 'Conversation not found' });
+
+    const validUserIds = [String(conv.buyer_id), String(conv.seller_id)];
+    if (!validUserIds.includes(String(user_id))) {
+      return res.status(400).json({ error: 'User is not part of this conversation' });
+    }
+
+    const msg = await Message.create({
+      conversation_id:       conv._id,
+      sender_id:             req.user.id,
+      receiver_id:           user_id,
+      content:               message.trim(),
+      is_admin_notification: true,
+      notification_to:       user_id,
+    });
+
+    await Conversation.findByIdAndUpdate(conv._id, {
+      $set: { last_message: '📣 Admin notification', last_message_at: new Date() },
+    });
+
+    const { notifyUser } = require('../db/push');
+    notifyUser(String(user_id), {
+      title: '📣 Admin Notice',
+      body: message.trim().slice(0, 100),
+      type: 'admin_notification',
+      url: `/pages/messages.html?conv=${conv._id}`,
+    }).catch(() => {});
+
+    res.json({ success: true, message_id: msg._id });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
 module.exports = router;

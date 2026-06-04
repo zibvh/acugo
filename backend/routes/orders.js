@@ -60,6 +60,7 @@ router.get('/buying', authMiddleware, async (req, res) => {
       listing_title:    o.listing_id?.title,
       listing_images:   o.listing_id?.images || [],
       category:         o.listing_id?.category,
+      seller_id:        o.seller_id?._id || o.seller_id,
       seller_name:      o.seller_id?.full_name,
       seller_university:o.seller_id?.university,
     })));
@@ -80,6 +81,7 @@ router.get('/selling', authMiddleware, async (req, res) => {
       listing_title:   o.listing_id?.title,
       listing_images:  o.listing_id?.images || [],
       category:        o.listing_id?.category,
+      buyer_id:        o.buyer_id?._id || o.buyer_id,
       buyer_name:      o.buyer_id?.full_name,
       buyer_university:o.buyer_id?.university,
     })));
@@ -130,6 +132,74 @@ router.put('/:id/status', authMiddleware, async (req, res) => {
     if (status === 'cancelled') await Listing.findByIdAndUpdate(order.listing_id, { $set: { status: 'active' } });
 
     res.json({ success: true, status });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// POST /api/orders/:id/mark-complete — buyer or seller marks their side done
+router.post('/:id/mark-complete', authMiddleware, async (req, res) => {
+  try {
+    const uid   = req.user.id;
+    const order = await Order.findById(req.params.id);
+    if (!order) return res.status(404).json({ error: 'Order not found' });
+
+    const isBuyer  = String(order.buyer_id)  === String(uid);
+    const isSeller = String(order.seller_id) === String(uid);
+    if (!isBuyer && !isSeller) return res.status(403).json({ error: 'Forbidden' });
+
+    // Only allow for confirmed orders
+    if (!['confirmed', 'completing'].includes(order.status))
+      return res.status(400).json({ error: 'Order must be confirmed before marking complete' });
+
+    const update = {};
+    if (isBuyer)  update.buyer_marked_complete  = true;
+    if (isSeller) update.seller_marked_complete = true;
+
+    // If both sides have now marked complete → finalize
+    const buyerDone  = isBuyer  ? true : order.buyer_marked_complete;
+    const sellerDone = isSeller ? true : order.seller_marked_complete;
+
+    if (buyerDone && sellerDone) {
+      update.status = 'completed';
+      await Listing.findByIdAndUpdate(order.listing_id, { $set: { status: 'sold' } });
+    } else {
+      update.status = 'completing'; // waiting for the other side
+    }
+
+    const updated = await Order.findByIdAndUpdate(req.params.id, { $set: update }, { new: true });
+    res.json({ ...updated.toObject(), id: updated._id, needs_rating: isBuyer && buyerDone && sellerDone });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// POST /api/orders/:id/rate — buyer rates seller after order completes
+router.post('/:id/rate', authMiddleware, async (req, res) => {
+  try {
+    const uid   = req.user.id;
+    const { rating, review } = req.body;
+    if (!rating || rating < 1 || rating > 5)
+      return res.status(400).json({ error: 'Rating must be between 1 and 5' });
+
+    const order = await Order.findById(req.params.id);
+    if (!order) return res.status(404).json({ error: 'Order not found' });
+    if (String(order.buyer_id) !== String(uid))
+      return res.status(403).json({ error: 'Only the buyer can rate this order' });
+    if (order.status !== 'completed')
+      return res.status(400).json({ error: 'Order must be completed first' });
+    if (order.buyer_rating)
+      return res.status(409).json({ error: 'You have already rated this order' });
+
+    await Order.findByIdAndUpdate(req.params.id, {
+      $set: { buyer_rating: rating, buyer_review: (review || '').trim(), buyer_rated_at: new Date() },
+    });
+
+    // Recalculate seller's rating
+    const seller = await User.findById(order.seller_id);
+    const newCount = (seller.rating_count || 0) + 1;
+    const newRating = (((seller.rating || 0) * (seller.rating_count || 0)) + rating) / newCount;
+    await User.findByIdAndUpdate(order.seller_id, {
+      $set: { rating: Math.round(newRating * 10) / 10, rating_count: newCount },
+    });
+
+    res.json({ success: true });
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 

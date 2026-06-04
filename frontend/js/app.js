@@ -128,7 +128,11 @@ function productCardHTML(listing, saved = false) {
           <span class="product-card-price">${formatPrice(listing.price)}</span>
           ${listing.original_price ? `<span class="product-card-price-orig">${formatPrice(listing.original_price)}</span>` : ''}
         </div>
-        <div class="product-card-seller">${listing.seller_name || 'ACU Student'}</div>
+        <div class="product-card-seller">
+          ${listing.seller_id
+            ? `<a href="/pages/user-profile.html?id=${listing.seller_id}" onclick="event.stopPropagation()" style="color:inherit;text-decoration:none;">${listing.seller_name || 'ACU Student'}</a>`
+            : (listing.seller_name || 'ACU Student')}
+        </div>
       </div>
     </div>
   </div>`;

@@ -103,13 +103,18 @@ conversationReportSchema.index({ conversation_id: 1 });
 conversationReportSchema.index({ status: 1 });
 
 const orderSchema = new mongoose.Schema({
-  listing_id:      { type: mongoose.Schema.Types.ObjectId, ref: 'Listing', required: true },
-  buyer_id:        { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
-  seller_id:       { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
-  amount:          { type: Number, required: true },
-  status:          { type: String, default: 'pending', enum: ['pending','confirmed','completed','cancelled'] },
-  meetup_location: { type: String, default: null },
-  meetup_time:     { type: String, default: null },
+  listing_id:             { type: mongoose.Schema.Types.ObjectId, ref: 'Listing', required: true },
+  buyer_id:               { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
+  seller_id:              { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
+  amount:                 { type: Number, required: true },
+  status:                 { type: String, default: 'pending', enum: ['pending','confirmed','completing','completed','cancelled'] },
+  meetup_location:        { type: String, default: null },
+  meetup_time:            { type: String, default: null },
+  buyer_marked_complete:  { type: Boolean, default: false },
+  seller_marked_complete: { type: Boolean, default: false },
+  buyer_rating:           { type: Number, default: null, min: 1, max: 5 },
+  buyer_review:           { type: String, default: '' },
+  buyer_rated_at:         { type: Date, default: null },
 }, { timestamps: { createdAt: 'created_at', updatedAt: 'updated_at' } });
 
 orderSchema.index({ buyer_id: 1 });

@@ -360,8 +360,10 @@ function buildThreadHTML(conv, otherName) {
       <button class="mobile-back-btn" id="t-back" aria-label="Back">
         <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
       </button>
-      <div class="avatar avatar-md" style="flex-shrink:0;">${getInitials(otherName)}</div>
-      <div style="flex:1;min-width:0;">
+      <div class="avatar avatar-md" style="flex-shrink:0;cursor:pointer;" onclick="window.location.href='user-profile.html?id=${conv?.other_user?.id || ''}'">
+        ${getInitials(otherName)}
+      </div>
+      <div style="flex:1;min-width:0;cursor:pointer;" onclick="window.location.href='user-profile.html?id=${conv?.other_user?.id || ''}'">
         <div class="thread-header-name">${otherName}</div>
         <div class="thread-header-sub">${conv?.listing_title ? 'Re: ' + conv.listing_title : 'Direct message'}</div>
       </div>

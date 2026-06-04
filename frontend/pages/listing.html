@@ -243,9 +243,13 @@
             <div class="detail-section-title">About the seller</div>
             <div style="background:var(--surface);border:1.5px solid var(--border);border-radius:var(--radius-lg);padding:20px;">
               <div style="display:flex;align-items:center;gap:14px;margin-bottom:14px;">
-                <div class="avatar avatar-lg" style="background:var(--surface-2);font-size:22px;">${getInitials(l.seller_name)}</div>
+                <a href="user-profile.html?id=${l.seller_id}" style="text-decoration:none;flex-shrink:0;">
+                  <div class="avatar avatar-lg" style="background:var(--surface-2);font-size:22px;">${getInitials(l.seller_name)}</div>
+                </a>
                 <div>
-                  <div style="font-size:17px;font-weight:700;">${l.seller_name}</div>
+                  <a href="user-profile.html?id=${l.seller_id}" style="text-decoration:none;color:inherit;">
+                    <div style="font-size:17px;font-weight:700;">${l.seller_name}</div>
+                  </a>
                   <div style="font-size:13px;color:var(--ink-3);margin-top:2px;">${l.seller_university}</div>
                   <div style="display:flex;align-items:center;gap:8px;margin-top:5px;">
                     ${stars(l.seller_rating)}

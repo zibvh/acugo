@@ -5,6 +5,7 @@ const jwt        = require('jsonwebtoken');
 const crypto     = require('crypto');
 const rateLimit  = require('express-rate-limit');
 const { User }   = require('../db/database');
+const { Order, Listing } = require('../db/database');
 const { authMiddleware } = require('../middleware/auth');
 const { sendVerificationEmail, sendPasswordResetEmail } = require('../utils/email');
 
@@ -363,6 +364,37 @@ router.post('/credits/verify', authMiddleware, async (req, res) => {
     console.error('[credits/verify] Exception:', e.message);
     res.status(500).json({ error: e.message });
   }
+});
+
+// GET /api/auth/users/:id/profile — public profile (no auth required)
+router.get('/users/:id/profile', async (req, res) => {
+  try {
+    const user = await User.findById(req.params.id)
+      .select('full_name avatar_url bio university role rating rating_count business_name created_at account_status')
+      .lean();
+    if (!user || user.account_status === 'suspended') return res.status(404).json({ error: 'User not found' });
+
+    let extra = {};
+    if (user.role === 'seller') {
+      const listings = await Listing.find({ seller_id: user._id, status: { $ne: 'deleted' } })
+        .select('title images price category status views').sort({ created_at: -1 }).limit(12).lean();
+      const completedOrders = await Order.countDocuments({ seller_id: user._id, status: 'completed' });
+      const reviews = await Order.find({ seller_id: user._id, buyer_rating: { $ne: null } })
+        .populate('buyer_id', 'full_name avatar_url')
+        .select('buyer_rating buyer_review buyer_rated_at buyer_id')
+        .sort({ buyer_rated_at: -1 }).limit(10).lean();
+      extra = { listings, completed_sales: completedOrders, reviews };
+    } else {
+      const purchases = await Order.countDocuments({ buyer_id: user._id, status: 'completed' });
+      const reviews = await Order.find({ buyer_id: user._id, buyer_rating: { $ne: null } })
+        .populate('listing_id', 'title')
+        .select('buyer_rating buyer_review buyer_rated_at listing_id')
+        .sort({ buyer_rated_at: -1 }).limit(10).lean();
+      extra = { purchases, reviews };
+    }
+
+    res.json({ ...user, id: user._id, ...extra });
+  } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
 module.exports = router;

@@ -261,7 +261,20 @@
   <div class="reg-card" id="step-done" style="display:none; text-align:center;">
     <div style="margin-bottom:20px;" id="done-check-icon"></div>
     <div class="reg-card-title" style="margin-bottom:8px;">You're all set!</div>
-    <div class="reg-card-sub" style="margin-bottom:28px;">Your registration is complete. Welcome to Bixcart.</div>
+    <div class="reg-card-sub" style="margin-bottom:20px;">Your registration is complete. Welcome to Bixcart.</div>
+
+    <!-- Notification prompt -->
+    <div id="notif-prompt" style="background:linear-gradient(135deg,#fef3c7,#fffbeb);border:1.5px solid #fbbf24;border-radius:14px;padding:16px;margin-bottom:20px;text-align:left;display:none;">
+      <div style="font-size:24px;margin-bottom:8px;">🔔</div>
+      <div style="font-size:14px;font-weight:700;margin-bottom:5px;color:#92400e;">Stay in the loop</div>
+      <div style="font-size:13px;color:#78350f;line-height:1.6;margin-bottom:12px;">Turn on notifications so you never miss a message from buyers or sellers. It takes one tap.</div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;">
+        <button class="btn btn-sm" id="enable-notif-btn" style="background:#f59e0b;border-color:#f59e0b;color:white;font-weight:600;">Enable notifications</button>
+        <button class="btn btn-ghost btn-sm" id="skip-notif-btn" style="color:#92400e;">Maybe later</button>
+      </div>
+      <div id="notif-prompt-result" style="font-size:12px;margin-top:8px;color:#059669;display:none;font-weight:600;">✓ Notifications enabled!</div>
+    </div>
+
     <a id="dashboard-link" class="btn btn-primary btn-lg w-full">Go to my dashboard</a>
   </div>
 </div>
@@ -431,6 +444,22 @@
       document.getElementById('step-done').style.display = 'block';
       document.getElementById('step3-el').classList.remove('active');
       document.getElementById('step3-el').classList.add('done');
+
+      // Show notification prompt if not already granted
+      if (pushManager.canPush() && !pushManager.alreadyGranted()) {
+        document.getElementById('notif-prompt').style.display = 'block';
+      }
+      document.getElementById('enable-notif-btn').addEventListener('click', async () => {
+        const ok = await requestPushPermission();
+        if (ok) {
+          document.getElementById('notif-prompt-result').style.display = 'block';
+          document.getElementById('enable-notif-btn').style.display = 'none';
+          document.getElementById('skip-notif-btn').style.display = 'none';
+        }
+      });
+      document.getElementById('skip-notif-btn').addEventListener('click', () => {
+        document.getElementById('notif-prompt').style.display = 'none';
+      });
     } catch(err) {
       toast(err.message, 'error');
       btn.disabled = false; btn.textContent = 'Complete registration';

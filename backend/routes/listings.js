@@ -54,6 +54,7 @@ router.get('/', optionalAuth, async (req, res) => {
 
     const enriched = listings.map(l => ({
       ...l, id: l._id,
+      seller_id:       l.seller_id?._id || l.seller_id,
       seller_name:     l.seller_id?.full_name,
       seller_rating:   l.seller_id?.rating,
       seller_verified: l.seller_id?.is_verified,

@@ -178,6 +178,21 @@
       </div>
     </div>
 
+    <!-- ORDERS -->
+    <div style="margin-bottom:24px;">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;">
+        <h2 style="font-family:var(--font-display);font-size:20px;letter-spacing:-.5px;">Orders</h2>
+        <div style="display:flex;gap:8px;">
+          <button class="btn btn-ghost btn-sm order-filter-btn active" data-filter="pending" onclick="setOrderFilter('pending',this)">Pending</button>
+          <button class="btn btn-ghost btn-sm order-filter-btn" data-filter="confirmed" onclick="setOrderFilter('confirmed',this)">Confirmed</button>
+          <button class="btn btn-ghost btn-sm order-filter-btn" data-filter="completed" onclick="setOrderFilter('completed',this)">Completed</button>
+        </div>
+      </div>
+      <div class="card" style="padding:0 20px;" id="orders-container">
+        <div style="padding:40px;text-align:center;color:var(--ink-3);">Loading…</div>
+      </div>
+    </div>
+
     <!-- LISTINGS -->
     <div>
       <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;">
@@ -354,6 +369,97 @@
   document.querySelector('.credits-box').innerHTML = document.querySelector('.credits-box').innerHTML.replace('${icons_placeholder_tag}', icons.tag);
 
   let allListings = [], currentFilter = 'all';
+  let allOrders = [], currentOrderFilter = 'pending';
+
+  function setOrderFilter(f, btn) {
+    currentOrderFilter = f;
+    document.querySelectorAll('.order-filter-btn').forEach(b => b.classList.toggle('active', b === btn));
+    renderSellerOrders();
+  }
+  window.setOrderFilter = setOrderFilter;
+
+  async function loadOrders() {
+    try {
+      const orders = await api.get('/orders/selling');
+      allOrders = orders;
+      renderSellerOrders();
+    } catch(e) {
+      const el = document.getElementById('orders-container');
+      if (el) el.innerHTML = `<div style="padding:24px;color:var(--red,#e53e3e);font-size:13px">${e.message}</div>`;
+    }
+  }
+
+  function renderSellerOrders() {
+    const el = document.getElementById('orders-container');
+    if (!el) return;
+    const filtered = currentOrderFilter === 'all' ? allOrders : allOrders.filter(o => {
+      if (currentOrderFilter === 'pending')   return o.status === 'pending';
+      if (currentOrderFilter === 'confirmed') return ['confirmed','completing'].includes(o.status);
+      if (currentOrderFilter === 'completed') return o.status === 'completed';
+      return true;
+    });
+    if (!filtered.length) {
+      el.innerHTML = `<div style="padding:32px;text-align:center;color:var(--ink-3);font-size:13px;">No ${currentOrderFilter} orders yet.</div>`;
+      return;
+    }
+    el.innerHTML = filtered.map(o => `
+      <div style="display:flex;align-items:flex-start;gap:14px;padding:14px 0;border-bottom:1px solid var(--border);" class="order-row">
+        <div style="width:48px;height:48px;border-radius:var(--radius-md);background:var(--surface-2);overflow:hidden;flex-shrink:0;display:flex;align-items:center;justify-content:center;">
+          ${o.listing_images?.[0] ? `<img src="${o.listing_images[0]}" style="width:100%;height:100%;object-fit:cover;">` : icons.package}
+        </div>
+        <div style="flex:1;min-width:0;">
+          <div style="font-size:13px;font-weight:600;margin-bottom:3px;">${o.listing_title || 'Item'}</div>
+          <div style="font-size:12px;color:var(--ink-3);display:flex;flex-wrap:wrap;gap:8px;align-items:center;">
+            ${statusBadge(o.status)}
+            <span style="cursor:pointer;color:var(--accent);text-decoration:underline;text-decoration-style:dotted;" onclick="openUserProfile('${o.buyer_id || ''}','${(o.buyer_name||'').replace(/'/g,"\\'")}')">${icons.user} ${o.buyer_name || 'Buyer'}</span>
+            <span>${formatDate(o.created_at)}</span>
+          </div>
+          ${o.status === 'completing' && o.seller_marked_complete ? `<div style="font-size:12px;color:#d69e2e;margin-top:5px;font-weight:600;">⏳ Waiting for buyer to confirm…</div>` : ''}
+        </div>
+        <div style="text-align:right;flex-shrink:0;">
+          <div style="font-size:15px;font-weight:700;margin-bottom:6px;">${formatPrice(o.amount)}</div>
+          <div style="display:flex;gap:6px;flex-wrap:wrap;justify-content:flex-end;">
+            ${o.status === 'pending'
+              ? `<button class="btn btn-primary btn-sm" onclick="confirmOrder('${o.id}')">Confirm</button>
+                 <button class="btn btn-ghost btn-sm" onclick="cancelOrder('${o.id}')">Cancel</button>`
+              : ''}
+            ${(o.status === 'confirmed' || (o.status === 'completing' && !o.seller_marked_complete))
+              ? `<button class="btn btn-primary btn-sm" onclick="sellerMarkComplete('${o.id}')">✓ Mark Complete</button>` : ''}
+          </div>
+        </div>
+      </div>`).join('');
+  }
+
+  window.confirmOrder = async (id) => {
+    try {
+      await api.put(`/orders/${id}/status`, { status: 'confirmed' });
+      toast('Order confirmed!', 'success');
+      loadOrders();
+    } catch(e) { toast(e.message, 'error'); }
+  };
+
+  window.cancelOrder = async (id) => {
+    if (!confirm('Cancel this order?')) return;
+    try {
+      await api.put(`/orders/${id}/status`, { status: 'cancelled' });
+      toast('Order cancelled.', 'success');
+      loadOrders();
+    } catch(e) { toast(e.message, 'error'); }
+  };
+
+  window.sellerMarkComplete = async (id) => {
+    if (!confirm('Mark this transaction as complete on your end?')) return;
+    try {
+      await api.post(`/orders/${id}/mark-complete`, {});
+      toast('Marked complete!', 'success');
+      loadOrders();
+    } catch(e) { toast(e.message, 'error'); }
+  };
+
+  window.openUserProfile = (userId) => {
+    if (!userId) return;
+    window.location.href = `user-profile.html?id=${userId}`;
+  };
 
   async function loadDashboard() {
     try {
@@ -370,6 +476,7 @@
       document.getElementById('stat-views').textContent = views;
       document.getElementById('stat-sold').textContent = sold;
       renderListings();
+      loadOrders();
     } catch (e) { toast(e.message, 'error'); }
   }
 
@@ -429,18 +536,19 @@
     const ok = await requestPushPermission();
     if (ok) {
       document.getElementById('notif-btn').style.display = 'none';
-      toast('Notifications enabled! You\'ll be notified for new messages and likes.', 'success');
+      toast('Notifications enabled!', 'success');
     }
   }
 
-  // Show notification button whenever the browser supports push and hasn't granted yet
-  document.addEventListener('DOMContentLoaded', () => {
-    const btn = document.getElementById('notif-btn');
-    if (!btn) return;
+  // Always show notification button when push hasn't been granted yet
+  const _notifBtn = document.getElementById('notif-btn');
+  if (_notifBtn) {
     if (pushManager.canPush() && !pushManager.alreadyGranted()) {
-      btn.style.display = 'flex';
+      _notifBtn.style.display = 'flex';
+    } else {
+      _notifBtn.style.display = 'none';
     }
-  });
+  }
 
   renderFooter();
   loadProfileHeader();

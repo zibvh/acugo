@@ -44,7 +44,13 @@ router.get('/conversations/:id', authMiddleware, async (req, res) => {
     if (!conv) return res.status(404).json({ error: 'Conversation not found' });
 
     const messages = await Message
-      .find({ conversation_id: req.params.id })
+      .find({
+        conversation_id: req.params.id,
+        $or: [
+          { is_admin_notification: { $ne: true } },
+          { is_admin_notification: true, notification_to: uid },
+        ],
+      })
       .populate('sender_id', 'full_name')
       .sort({ created_at: 1 }).lean();
 

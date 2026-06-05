@@ -566,38 +566,68 @@ function showModal({ title, sub, placeholder, confirmLabel, confirmClass = 'btn-
   const root = document.getElementById('modal-root');
   root.innerHTML = `
     <div class="modal-overlay" id="modal-overlay">
-      <div class="modal-box">
+      <div class="modal-box" style="position:relative;">
+        <button id="modal-back-btn" style="display:flex;align-items:center;gap:4px;background:none;border:none;cursor:pointer;color:var(--ink-3);font-size:13px;font-family:var(--font-body);padding:0 0 14px 0;">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="15 18 9 12 15 6"/></svg>
+          Back
+        </button>
         <div class="modal-title">${title}</div>
-        <div class="modal-sub">${sub}</div>
+        <div class="modal-sub">${sub || ''}</div>
         ${noReason ? '' : `
         <label class="modal-label">Reason</label>
         <textarea class="modal-textarea" id="modal-reason" placeholder="${placeholder || 'Enter reason…'}"></textarea>
         `}
         <div class="modal-footer">
-          <button class="btn btn-ghost" id="modal-cancel">Cancel</button>
           <button class="btn ${confirmClass}" id="modal-confirm">${confirmLabel}</button>
         </div>
       </div>
     </div>`;
-  document.getElementById('modal-overlay').addEventListener('click', e => { if (e.target.id === 'modal-overlay') closeModal(); });
-  document.getElementById('modal-cancel').addEventListener('click', closeModal);
+
+  // Push history state so hardware back closes modal instead of leaving page
+  history.pushState({ bixModal: true }, '');
+
+  const close = () => {
+    root.innerHTML = '';
+    if (history.state?.bixModal) history.back();
+  };
+
+  document.getElementById('modal-overlay').addEventListener('click', e => { if (e.target.id === 'modal-overlay') close(); });
+  document.getElementById('modal-back-btn').addEventListener('click', close);
   document.getElementById('modal-confirm').addEventListener('click', () => {
-    const reason = noReason ? null : document.getElementById('modal-reason').value.trim();
-    if (!noReason && !reason) { document.getElementById('modal-reason').style.borderColor = 'var(--red,#e53e3e)'; return; }
+    const reason = noReason ? null : (document.getElementById('modal-reason')?.value?.trim() || '');
+    if (!noReason && !reason) { const ta = document.getElementById('modal-reason'); if(ta) ta.style.borderColor = 'var(--red,#e53e3e)'; return; }
+    root.innerHTML = '';
+    if (history.state?.bixModal) history.back();
     onConfirm(reason);
   });
 }
-function closeModal() { document.getElementById('modal-root').innerHTML = ''; }
+function closeModal() {
+  const root = document.getElementById('modal-root');
+  root.innerHTML = '';
+  if (history.state?.bixModal) history.back();
+}
 
 // ── Drawer helper ────────────────────────────────────────────────────────────
-function closeDrawer() { document.getElementById('drawer-root').innerHTML = ''; }
+function closeDrawer() {
+  document.getElementById('drawer-root').innerHTML = '';
+  if (history.state?.bixDrawer) history.back();
+}
 function showDrawer(html) {
   const root = document.getElementById('drawer-root');
   root.innerHTML = `
     <div class="drawer-overlay" id="drawer-overlay"></div>
     <div class="drawer">${html}</div>`;
+  history.pushState({ bixDrawer: true }, '');
   root.querySelector('.drawer-overlay').addEventListener('click', closeDrawer);
 }
+
+// Hardware back closes any open overlay
+window.addEventListener('popstate', () => {
+  const modalRoot  = document.getElementById('modal-root');
+  const drawerRoot = document.getElementById('drawer-root');
+  if (modalRoot?.innerHTML)  { modalRoot.innerHTML = ''; return; }
+  if (drawerRoot?.innerHTML) { drawerRoot.innerHTML = ''; }
+});
 
 // ══════════════════════════════════════════════════════════════════════════════
 // OVERVIEW
@@ -798,6 +828,7 @@ async function openUserDrawer(id) {
       </div>` : ''}
       <div class="drawer-section" id="drawer-actions" style="display:flex;flex-direction:column;gap:8px;">
         <div class="drawer-section-title">Actions</div>
+        <button class="btn btn-sm" data-drawer-action="message" data-id="${u._id}" data-name="${escHtml(u.full_name)}" style="background:#ebf8ff;border:1.5px solid #63b3ed;color:#2b6cb0">💬 Send message</button>
         ${u.account_status !== 'suspended'
           ? `<button class="btn btn-sm" data-drawer-action="warn"    data-id="${u._id}" data-name="${escHtml(u.full_name)}" style="background:#fffff0;border:1.5px solid #d69e2e;color:#744210">⚠️ Warn user</button>
              <button class="btn btn-sm" data-drawer-action="suspend" data-id="${u._id}" data-name="${escHtml(u.full_name)}" style="background:#fff5f5;border:1.5px solid #e53e3e;color:#9b2c2c">🔒 Suspend account</button>`
@@ -811,6 +842,7 @@ async function openUserDrawer(id) {
       if (!btn) return;
       const { drawerAction, id: uid, name } = btn.dataset;
       closeDrawer();
+      if (drawerAction === 'message') sendAdminMessage(uid, name);
       if (drawerAction === 'warn')    warnUser(uid, name);
       if (drawerAction === 'suspend') suspendUser(uid, name);
       if (drawerAction === 'restore') unsuspendUser(uid, name);
@@ -833,7 +865,6 @@ function warnUser(id, name) {
     confirmClass: 'btn-accent',
     onConfirm: async (reason) => {
       try {
-        closeModal();
         await api.post(`/admin/users/${id}/warn`, { reason });
         toast(`${name} has been warned.`, 'success');
         if (currentTab === 'users') fetchUsers(usersState.page);
@@ -851,7 +882,6 @@ function suspendUser(id, name) {
     confirmClass: 'btn-primary',
     onConfirm: async (reason) => {
       try {
-        closeModal();
         await api.post(`/admin/users/${id}/suspend`, { reason });
         toast(`${name} has been suspended.`, 'success');
         if (currentTab === 'users') fetchUsers(usersState.page);
@@ -869,7 +899,6 @@ function unsuspendUser(id, name) {
     noReason: true,
     onConfirm: async () => {
       try {
-        closeModal();
         await api.post(`/admin/users/${id}/unsuspend`, {});
         toast(`${name}'s account has been restored.`, 'success');
         if (currentTab === 'users') fetchUsers(usersState.page);
@@ -887,12 +916,27 @@ function kickUser(id, name) {
     confirmClass: 'btn-primary',
     onConfirm: async () => {
       try {
-        closeModal();
         await api.delete(`/admin/users/${id}`);
         toast(`${name}'s account has been deleted.`, 'success');
         if (currentTab === 'users') fetchUsers(usersState.page);
       } catch(e) { toast(e.message, 'error'); }
     }
+  });
+}
+
+function sendAdminMessage(id, name) {
+  showModal({
+    title: `Message ${name}`,
+    sub: 'This will send a push notification and inbox message to the user.',
+    placeholder: 'e.g. Your listing was reviewed and restored.',
+    confirmLabel: 'Send Message',
+    confirmClass: 'btn-primary',
+    onConfirm: async (message) => {
+      try {
+        await api.post(`/admin/users/${id}/message`, { message });
+        toast(`Message sent to ${name}.`, 'success');
+      } catch(e) { toast(e.message, 'error'); }
+    },
   });
 }
 
@@ -1011,7 +1055,6 @@ function removeListingConfirm(id, title) {
     noReason: true,
     onConfirm: async () => {
       try {
-        closeModal();
         await api.delete(`/admin/listings/${id}`);
         toast('Listing removed.', 'success');
         fetchListings(listingsState.page);
@@ -1319,16 +1362,14 @@ async function openConversation(reportId) {
 async function renderFlagged() {
   const c = document.getElementById('admin-content');
   c.innerHTML = `
-    <div style="margin-bottom:20px;">
+    <div style="margin-bottom:16px;">
       <div class="report-filter-tabs" id="flag-filter-tabs">
         <div class="report-filter-tab active" data-type="all">All</div>
         <div class="report-filter-tab" data-type="conversations">Conversations</div>
         <div class="report-filter-tab" data-type="listings">Listings</div>
       </div>
     </div>
-    <div id="flagged-content">
-      <div style="padding:24px;color:var(--ink-3)">Loading…</div>
-    </div>`;
+    <div id="flagged-content"><div style="padding:24px;color:var(--ink-3)">Loading…</div></div>`;
 
   document.getElementById('flag-filter-tabs').addEventListener('click', e => {
     const tab = e.target.closest('.report-filter-tab');
@@ -1337,49 +1378,52 @@ async function renderFlagged() {
     tab.classList.add('active');
     loadFlagged(tab.dataset.type);
   });
-
   loadFlagged('all');
 }
 
 async function loadFlagged(type = 'all') {
   const el = document.getElementById('flagged-content');
   if (!el) return;
+  el.innerHTML = '<div style="padding:24px;color:var(--ink-3)">Loading…</div>';
   try {
     const data = await api.get(`/admin/flagged?type=${type}`);
     let html = '';
 
-    // Flagged Conversations
+    // ── Flagged Conversations ──────────────────────────────────────────────
     if (data.conversations?.length) {
       html += `<div style="margin-bottom:28px;">
         <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:var(--ink-3);margin-bottom:12px;">
           Flagged Conversations (${data.conversations.length})
         </div>`;
       data.conversations.forEach(conv => {
+        const buyer  = escHtml(conv.buyer_id?.full_name  || '?');
+        const seller = escHtml(conv.seller_id?.full_name || '?');
+        const bId    = conv.buyer_id?._id  || conv.buyer_id;
+        const sId    = conv.seller_id?._id || conv.seller_id;
+        const bName  = escHtml(conv.buyer_id?.full_name  || 'Buyer');
+        const sName  = escHtml(conv.seller_id?.full_name || 'Seller');
         html += `
           <div style="background:var(--surface);border:1.5px solid #fc8181;border-radius:var(--radius-lg);padding:16px;margin-bottom:12px;">
             <div style="display:flex;align-items:flex-start;gap:12px;flex-wrap:wrap;">
-              <div style="flex:1;min-width:180px;">
-                <div style="font-size:13px;font-weight:700;margin-bottom:4px;">
-                  ${escHtml(conv.buyer_id?.full_name||'?')} ↔ ${escHtml(conv.seller_id?.full_name||'?')}
-                </div>
-                ${conv.listing_id?.title ? `<div style="font-size:12px;color:var(--ink-3);margin-bottom:4px;">Re: ${escHtml(conv.listing_id.title)}</div>` : ''}
-                <div style="background:#fff5f5;border:1px solid #fc8181;border-radius:8px;padding:8px 10px;margin:8px 0;">
-                  <div style="font-size:10px;font-weight:700;color:#c53030;text-transform:uppercase;letter-spacing:.06em;margin-bottom:3px;">
-                    ⚠ AI Flag Reason
-                  </div>
-                  <div style="font-size:12px;color:#9b2c2c;">${escHtml(conv.ai_flag_reason||'No reason recorded')}</div>
+              <div style="flex:1;min-width:160px;">
+                <div style="font-size:13px;font-weight:700;margin-bottom:4px;">${buyer} ↔ ${seller}</div>
+                ${conv.listing_id?.title ? `<div style="font-size:12px;color:var(--ink-3);margin-bottom:6px;">Re: ${escHtml(conv.listing_id.title)}</div>` : ''}
+                <div style="background:#fff5f5;border:1px solid #fc8181;border-radius:8px;padding:8px 10px;margin-bottom:8px;">
+                  <div style="font-size:10px;font-weight:700;color:#c53030;text-transform:uppercase;letter-spacing:.06em;margin-bottom:3px;">⚠ AI Flag Reason</div>
+                  <div style="font-size:12px;color:#9b2c2c;">${escHtml(conv.ai_flag_reason || 'No reason recorded')}</div>
                   ${conv.ai_flag_category ? `<div style="font-size:10px;color:#c53030;margin-top:3px;font-weight:600;text-transform:uppercase">${escHtml(conv.ai_flag_category)}</div>` : ''}
                 </div>
                 <div style="font-size:11px;color:var(--ink-3);">Flagged ${fmtTime(conv.ai_flagged_at)}</div>
               </div>
-              <div style="display:flex;flex-direction:column;gap:8px;flex-shrink:0;">
-                <button class="btn btn-ghost btn-sm" onclick="openConversation('${conv._id}');switchTab('messages')">
-                  👁 View thread
-                </button>
-                <button class="btn btn-sm" style="background:#059669;border:none;color:white;font-size:12px;padding:6px 12px;border-radius:8px;cursor:pointer;"
-                  onclick="unflagConversation('${conv._id}')">
-                  ✓ Clear &amp; Resume
-                </button>
+              <div style="display:flex;flex-direction:column;gap:6px;flex-shrink:0;min-width:130px;">
+                <button class="action-btn restore" onclick="unflagConv('${conv._id}')">✓ Clear flag</button>
+                <button class="action-btn view"    onclick="viewFlaggedConv('${conv._id}')">👁 View thread</button>
+                <button class="action-btn warn"    onclick="warnUser('${bId}','${bName}')">⚠ Warn buyer</button>
+                <button class="action-btn warn"    onclick="warnUser('${sId}','${sName}')">⚠ Warn seller</button>
+                <button class="action-btn"         onclick="sendAdminMessage('${bId}','${bName}')" style="background:#ebf8ff;border-color:#63b3ed;color:#2b6cb0">💬 Msg buyer</button>
+                <button class="action-btn"         onclick="sendAdminMessage('${sId}','${sName}')" style="background:#ebf8ff;border-color:#63b3ed;color:#2b6cb0">💬 Msg seller</button>
+                <button class="action-btn kick"    onclick="kickUser('${bId}','${bName}')">🗑 Del buyer</button>
+                <button class="action-btn kick"    onclick="kickUser('${sId}','${sName}')">🗑 Del seller</button>
               </div>
             </div>
           </div>`;
@@ -1387,43 +1431,38 @@ async function loadFlagged(type = 'all') {
       html += '</div>';
     }
 
-    // Flagged Listings
+    // ── Flagged Listings ───────────────────────────────────────────────────
     if (data.listings?.length) {
       html += `<div>
         <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:var(--ink-3);margin-bottom:12px;">
           Flagged Listings (${data.listings.length})
         </div>`;
       data.listings.forEach(l => {
-        const thumb = l.images?.[0] ? `<img src="${l.images[0]}" style="width:100%;height:100%;object-fit:cover;">` : icons.package;
+        const sId   = l.seller_id?._id  || l.seller_id;
+        const sName = escHtml(l.seller_id?.full_name || 'Seller');
         html += `
           <div style="background:var(--surface);border:1.5px solid #fbbf24;border-radius:var(--radius-lg);padding:16px;margin-bottom:12px;">
             <div style="display:flex;align-items:flex-start;gap:12px;flex-wrap:wrap;">
               <div style="width:56px;height:56px;border-radius:8px;overflow:hidden;background:var(--surface-2);flex-shrink:0;display:flex;align-items:center;justify-content:center;">
-                ${thumb}
+                ${l.images?.[0] ? `<img src="${l.images[0]}" style="width:100%;height:100%;object-fit:cover;">` : icons.package}
               </div>
               <div style="flex:1;min-width:160px;">
                 <div style="font-size:13px;font-weight:700;margin-bottom:2px;">${escHtml(l.title)}</div>
-                <div style="font-size:12px;color:var(--ink-3);margin-bottom:6px;">
-                  by ${escHtml(l.seller_id?.full_name||'?')} · ${formatPrice(l.price)}
-                </div>
+                <div style="font-size:12px;color:var(--ink-3);margin-bottom:6px;">by ${sName} · ${formatPrice(l.price)}</div>
                 <div style="background:#fffbeb;border:1px solid #fbbf24;border-radius:8px;padding:8px 10px;margin-bottom:6px;">
-                  <div style="font-size:10px;font-weight:700;color:#92400e;text-transform:uppercase;letter-spacing:.06em;margin-bottom:3px;">
-                    ⚠ AI Flag Reason
-                  </div>
-                  <div style="font-size:12px;color:#78350f;">${escHtml(l.ai_flag_reason||'No reason recorded')}</div>
+                  <div style="font-size:10px;font-weight:700;color:#92400e;text-transform:uppercase;letter-spacing:.06em;margin-bottom:3px;">⚠ AI Flag Reason</div>
+                  <div style="font-size:12px;color:#78350f;">${escHtml(l.ai_flag_reason || 'No reason recorded')}</div>
                 </div>
                 <div style="font-size:11px;color:var(--ink-3);">Flagged ${fmtTime(l.ai_flagged_at)}</div>
               </div>
-              <div style="display:flex;flex-direction:column;gap:8px;flex-shrink:0;">
-                <a href="/pages/listing.html?id=${l._id}" target="_blank" class="btn btn-ghost btn-sm">👁 View</a>
-                <button class="btn btn-sm" style="background:#059669;border:none;color:white;font-size:12px;padding:6px 12px;border-radius:8px;cursor:pointer;"
-                  onclick="unflagListing('${l._id}','restore')">
-                  ✓ Restore
-                </button>
-                <button class="btn btn-sm" style="background:#e53e3e;border:none;color:white;font-size:12px;padding:6px 12px;border-radius:8px;cursor:pointer;"
-                  onclick="unflagListing('${l._id}','remove')">
-                  ✕ Remove
-                </button>
+              <div style="display:flex;flex-direction:column;gap:6px;flex-shrink:0;min-width:130px;">
+                <button class="action-btn restore" onclick="unflagListing('${l._id}','restore')">✓ Restore</button>
+                <button class="action-btn kick"    onclick="unflagListing('${l._id}','remove')">✕ Remove</button>
+                <a href="/pages/listing.html?id=${l._id}" target="_blank" class="action-btn view" style="text-decoration:none;text-align:center;">👁 View</a>
+                <button class="action-btn warn"    onclick="warnUser('${sId}','${sName}')">⚠ Warn seller</button>
+                <button class="action-btn"         onclick="sendAdminMessage('${sId}','${sName}')" style="background:#ebf8ff;border-color:#63b3ed;color:#2b6cb0">💬 Msg seller</button>
+                <button class="action-btn kick"    onclick="suspendUser('${sId}','${sName}')">🔒 Suspend</button>
+                <button class="action-btn kick"    onclick="kickUser('${sId}','${sName}')">🗑 Del account</button>
               </div>
             </div>
           </div>`;
@@ -1432,10 +1471,10 @@ async function loadFlagged(type = 'all') {
     }
 
     if (!html) {
-      html = `<div style="padding:48px;text-align:center;color:var(--ink-3);">
+      html = `<div style="padding:56px;text-align:center;color:var(--ink-3);">
         <div style="font-size:40px;margin-bottom:12px;">✅</div>
         <div style="font-size:15px;font-weight:700;margin-bottom:6px;">All clear</div>
-        <div style="font-size:13px;">No AI-flagged ${type === 'all' ? 'content' : type} at the moment.</div>
+        <div style="font-size:13px;">No AI-flagged ${type === 'all' ? 'content' : type} right now.</div>
       </div>`;
     }
     el.innerHTML = html;
@@ -1444,16 +1483,16 @@ async function loadFlagged(type = 'all') {
   }
 }
 
-window.unflagConversation = async (id) => {
+window.viewFlaggedConv = (id) => { switchTab('messages'); setTimeout(() => openConversation(id), 100); };
+
+window.unflagConv = (id) => {
   showModal({
-    title: 'Clear Flagged Conversation',
-    sub:   'This will remove the AI flag and allow both users to continue messaging.',
+    title: 'Clear AI Flag',
+    sub: 'Removes the flag and allows both users to continue messaging.',
     placeholder: 'Optional note (e.g. false positive)',
-    confirmLabel: 'Clear & Resume',
+    confirmLabel: 'Clear Flag',
     confirmClass: 'btn-primary',
-    noReason: false,
     onConfirm: async (note) => {
-      closeModal();
       try {
         await api.post(`/admin/flagged/conversations/${id}/unflag`, { note: note || '' });
         toast('Conversation cleared.', 'success');
@@ -1463,17 +1502,16 @@ window.unflagConversation = async (id) => {
   });
 };
 
-window.unflagListing = async (id, action) => {
+window.unflagListing = (id, action) => {
   showModal({
     title: action === 'remove' ? 'Remove Listing' : 'Restore Listing',
-    sub:   action === 'remove'
-      ? 'This will permanently remove the listing and notify the seller.'
-      : 'This will restore the listing to public view and notify the seller.',
-    confirmLabel: action === 'remove' ? 'Remove Listing' : 'Restore',
-    confirmClass: action === 'remove' ? 'btn-danger' : 'btn-primary',
+    sub: action === 'remove'
+      ? 'Permanently removes this listing and notifies the seller.'
+      : 'Restores this listing to public view and notifies the seller.',
+    confirmLabel: action === 'remove' ? 'Remove' : 'Restore',
+    confirmClass: action === 'remove' ? 'btn-primary' : 'btn-primary',
     noReason: true,
     onConfirm: async () => {
-      closeModal();
       try {
         await api.post(`/admin/flagged/listings/${id}/unflag`, { action });
         toast(action === 'remove' ? 'Listing removed.' : 'Listing restored.', 'success');
@@ -1482,63 +1520,6 @@ window.unflagListing = async (id, action) => {
     },
   });
 };
-
-// ══════════════════════════════════════════════════════════════════════════════
-// MODAL & DRAWER — back button / system back interception
-// ══════════════════════════════════════════════════════════════════════════════
-function pushModalState() {
-  history.pushState({ modal: true }, '');
-}
-function popModalState() {
-  // Only pop if we pushed (avoid double-pop)
-  if (history.state?.modal) history.back();
-}
-
-// Override showModal to push history state
-const _origShowModal = showModal;
-window.showModal = function(opts) {
-  _origShowModal(opts);
-  pushModalState();
-};
-const _origCloseModal = closeModal;
-window.closeModal = function() {
-  _origCloseModal();
-  popModalState();
-};
-
-// Override showDrawer / closeDrawer similarly
-const _origShowDrawer = showDrawer;
-window.showDrawer = function(html) {
-  _origShowDrawer(html);
-  pushModalState();
-};
-const _origCloseDrawer = closeDrawer;
-window.closeDrawer = function() {
-  _origCloseDrawer();
-  popModalState();
-};
-
-// Add physical back button to modal box
-const _origShowModalInner = showModal;
-const modalObserver = new MutationObserver(() => {
-  const box = document.querySelector('.modal-box');
-  if (box && !box.querySelector('.modal-back-btn')) {
-    const back = document.createElement('button');
-    back.className = 'modal-back-btn';
-    back.innerHTML = `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="15 18 9 12 15 6"/></svg>`;
-    back.style.cssText = 'position:absolute;top:14px;left:14px;background:none;border:none;cursor:pointer;color:var(--ink-3);padding:4px;border-radius:6px;display:flex;';
-    back.addEventListener('click', closeModal);
-    box.style.position = 'relative';
-    box.prepend(back);
-  }
-});
-modalObserver.observe(document.getElementById('modal-root'), { childList: true, subtree: false });
-
-// Handle browser/device back button
-window.addEventListener('popstate', (e) => {
-  if (document.getElementById('modal-root').innerHTML) { _origCloseModal(); return; }
-  if (document.getElementById('drawer-root').innerHTML) { _origCloseDrawer(); return; }
-});
 
 // ── Boot ─────────────────────────────────────────────────────────────────────
 renderOverview();

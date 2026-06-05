@@ -17,7 +17,8 @@ const userSchema = new mongoose.Schema({
   rating:          { type: Number, default: 0 },
   rating_count:    { type: Number, default: 0 },
   is_verified:     { type: Boolean, default: false },
-  listing_credits: { type: Number, default: 1 },
+  listing_credits:  { type: Number, default: 1 },
+  admin_messages:   { type: [{ content: String, sent_at: Date, read: { type: Boolean, default: false } }], default: [] },
   used_payment_refs: { type: [String], default: [] },
   // Registration profile (filled after signup)
   registration_complete: { type: Boolean, default: false },

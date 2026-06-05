@@ -2,6 +2,7 @@ const express = require('express');
 const router  = express.Router();
 const { User, Listing, Conversation, Message, Order, ConversationReport } = require('../db/database');
 const { adminMiddleware } = require('../middleware/auth');
+const { notifyUser } = require('../db/push');
 
 // All admin routes require admin role
 router.use(adminMiddleware);
@@ -140,7 +141,34 @@ router.post('/users/:id/unsuspend', async (req, res) => {
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
-// DELETE /api/admin/users/:id — kick (delete) user + their data
+// POST /api/admin/users/:id/message — send a system message/notification to a user
+router.post('/users/:id/message', async (req, res) => {
+  try {
+    const { message } = req.body;
+    if (!message?.trim()) return res.status(400).json({ error: 'Message is required' });
+    const user = await User.findById(req.params.id).lean();
+    if (!user) return res.status(404).json({ error: 'User not found' });
+
+    notifyUser(String(user._id), {
+      title: '📣 Message from Bixcart Admin',
+      body:  message.trim(),
+      type:  'admin_message',
+    }).catch(() => {});
+
+    // Store message on user record for in-app inbox
+    await User.findByIdAndUpdate(req.params.id, {
+      $push: {
+        admin_messages: {
+          content: message.trim(),
+          sent_at: new Date(),
+          read: false,
+        },
+      },
+    });
+
+    res.json({ success: true });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
 router.delete('/users/:id', async (req, res) => {
   try {
     const user = await User.findById(req.params.id);
@@ -197,7 +225,7 @@ router.get('/listings', async (req, res) => {
 router.patch('/listings/:id/status', async (req, res) => {
   try {
     const { status } = req.body;
-    if (!['active','pending','sold','deleted'].includes(status))
+    if (!['active','pending','sold','deleted','flagged'].includes(status))
       return res.status(400).json({ error: 'Invalid status' });
     const listing = await Listing.findByIdAndUpdate(
       req.params.id, { $set: { status } }, { new: true }

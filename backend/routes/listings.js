@@ -161,6 +161,7 @@ router.put('/:id', authMiddleware, async (req, res) => {
     const listing = await Listing.findById(req.params.id);
     if (!listing) return res.status(404).json({ error: 'Not found' });
     if (String(listing.seller_id) !== String(req.user.id)) return res.status(403).json({ error: 'Forbidden' });
+    if (listing.ai_flagged) return res.status(403).json({ error: 'This listing has been flagged by our AI and cannot be edited until an admin reviews it.' });
 
     const ageMs = Date.now() - new Date(listing.created_at).getTime();
     if (ageMs > EDIT_LOCK_MS)

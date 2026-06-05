@@ -289,7 +289,7 @@
             const starsHTML = Array.from({length:5}, (_,i) =>
               `<span class="review-star" style="color:${i<starsFilled?'#f59e0b':'#d1d5db'}">★</span>`
             ).join('');
-            const dateStr = r.buyer_rated_at ? new Date(r.buyer_rated_at).toLocaleDateString('en-US',{month:'short',year:'numeric'}) : '';
+            const dateStr = r.buyer_rated_at ? new Date(r.buyer_rated_at).toLocaleDateString('en-NG',{month:'short',year:'numeric'}) : '';
             return `
               <div class="review-card">
                 <div class="review-header">

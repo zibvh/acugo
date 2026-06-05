@@ -514,8 +514,8 @@ async function fetchThread(id, silent = false) {
     let lastDate = null;
     msgsEl.innerHTML = data.messages.map(m => {
       const d = new Date(m.created_at);
-      const dateStr = d.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
-      const timeStr = d.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
+      const dateStr = d.toLocaleDateString('en-NG', { weekday: 'short', month: 'short', day: 'numeric' });
+      const timeStr = d.toLocaleTimeString('en-NG', { hour: 'numeric', minute: '2-digit' });
       let sep = '';
       if (dateStr !== lastDate) { sep = `<div class="date-sep"><span>${dateStr}</span></div>`; lastDate = dateStr; }
 

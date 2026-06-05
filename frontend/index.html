@@ -362,7 +362,7 @@
         const imgEl = document.getElementById(`hc-icon-${n}`);
         if (catEl) catEl.textContent = l.category || '';
         if (titleEl) titleEl.textContent = l.title || '';
-        if (priceEl) priceEl.textContent = l.price ? `$${l.price}` : '';
+        if (priceEl) priceEl.textContent = l.price ? `₦${parseFloat(l.price).toLocaleString('en-NG', {minimumFractionDigits: 0})}` : '';
         if (imgEl && l.images?.[0]) {
           imgEl.innerHTML = `<img src="${l.images[0]}" alt="" style="width:100%;height:100%;object-fit:cover;">`;
         }

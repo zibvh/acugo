@@ -5,13 +5,13 @@
  * 1. INSTANT keyword filter  — catches ~90% of violations, zero cost, zero latency
  * 2. AI queue (Gemini)       — only called for edge cases; rate-limit safe via queue
  *
- * Free Gemini tier: 15 req/min → queue drains at 1 req/4s = 15/min safely
+ * Free Gemini tier: 15 req/min → queue drains at 1 req/4.2s = ~14/min safely
  */
 
 const fetch = require('node-fetch');
 
 // ─────────────────────────────────────────────────────────────────────────────
-// LAYER 1 — Instant keyword filter (free, synchronous, no API needed)
+// LAYER 1 — Instant keyword filter
 // ─────────────────────────────────────────────────────────────────────────────
 const KEYWORD_RULES = [
   {
@@ -19,30 +19,14 @@ const KEYWORD_RULES = [
     reason: 'Sharing contact information or trying to move conversation off-platform is not allowed on Bixcart.',
     patterns: [
       /\bwhatsapp\b/i, /\bwatsapp\b/i, /\bw[- ]?app\b/i,
-      /\bsnapchat\b/i, /\bsnapchat\b/i, /\bsnap\b.*\bme\b/i, /\bmy snap\b/i, /\badd me on\b/i,
-      /\btelegram\b/i, /\binstagram\b/i, /\b(my )?insta\b/i,
-      /\bfacebook\b/i, /\btwitter\b/i, /\btwitter\b/i,
-      /\btiktok\b/i,
+      /\bsnapchat\b/i, /\bmy snap\b/i, /\badd me on snap/i,
+      /\btelegram\b/i,
       /\b(message|chat|text|reach|contact|hit) me (on|via|at|through)\b/i,
-      /\b(call|phone|ring) me\b/i,
-      /\bmy (phone |cell |mobile )?number( is)?\b/i,
-      /\b\d{4}[\s-]?\d{3}[\s-]?\d{4}\b/, // Nigerian phone pattern 08xx xxx xxxx
-      /\b0[789][01]\d{8}\b/,               // Nigerian mobile numbers
-      /\+?234\d{10}/,                       // +234 format
       /\b(dm|pm) me\b/i,
       /\boutside (this|the) (app|platform|chat)\b/i,
       /\boff (this|the) (app|platform)\b/i,
-    ],
-  },
-  {
-    category: 'off_platform_payment',
-    reason: 'All payments must go through Bixcart. Requesting external transfers is not allowed.',
-    patterns: [
-      /\b(send|transfer|pay|payment) (me |to )?(via|on|through|to)?\s*(opay|palmpay|kuda|gtb|access|zenith|uba|fcmb|sterling|moniepoint|paystack|flutterwave)/i,
-      /\b(send|transfer) (the )?(money|cash|funds|payment) (to )?(my )?(account|bank)\b/i,
-      /\bbank (transfer|details|account)\b/i,
-      /\baccount (number|details)\b/i,
-      /\bpay (me )?(directly|outside|off)\b/i,
+      /\b0[789][01]\d{8}\b/,
+      /\+?234\d{10}/,
     ],
   },
   {
@@ -57,19 +41,11 @@ const KEYWORD_RULES = [
     ],
   },
   {
-    category: 'harassment',
-    reason: 'Threatening or harassing language is not tolerated on Bixcart.',
-    patterns: [
-      /\b(i will|i'll|gonna|going to)\b.{0,20}\b(beat|fight|kill|hurt|harm|deal with|find you|report you to)/i,
-      /\b(stupid|idiot|fool|mumu|olodo|dullard|useless|senseless)\b/i,
-    ],
-  },
-  {
     category: 'prohibited_item',
-    reason: 'This item is prohibited on Bixcart.',
+    reason: 'This item or substance is prohibited on Bixcart.',
     patterns: [
-      /\b(sell|selling|buy|buying|available|have|got|supply)\b.{0,25}\b(weed|igbo|loud|colorado|shisha|codeine|tramadol|refnol|mkpuru mmiri|drug|coke|cocaine|heroin|meth)/i,
-      /\b(sell|selling|buying|available)\b.{0,25}\b(gun|knife|cutlass|blade|weapon|pistol|rifle|ammo|bullet)/i,
+      /\b(sell|selling|buy|buying|available|have|got|supply)\b.{0,25}\b(weed|igbo|loud|colorado|shisha|codeine|tramadol|refnol|mkpuru mmiri|coke|cocaine|heroin|meth)\b/i,
+      /\b(sell|selling|buying|available)\b.{0,25}\b(gun|knife|cutlass|blade|weapon|pistol|rifle|ammo|bullet)\b/i,
       /\bporn/i,
       /\bsex (tape|video|clip|movie|content)/i,
     ],
@@ -78,16 +54,12 @@ const KEYWORD_RULES = [
     category: 'adult_content',
     reason: 'Adult or sexual content is not allowed on Bixcart.',
     patterns: [
-      /\b(hook ?up|link ?up for sex|one night|friends with benefit)/i,
+      /\b(hook ?up|link ?up for sex|one night|friends with benefit)\b/i,
       /\bnude(s)?\b/i,
     ],
   },
 ];
 
-/**
- * Synchronous keyword check — runs instantly, no API call needed.
- * Returns { flagged, reason, category } immediately.
- */
 function keywordCheck(text) {
   for (const rule of KEYWORD_RULES) {
     for (const pattern of rule.patterns) {
@@ -100,8 +72,7 @@ function keywordCheck(text) {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// LAYER 2 — Gemini AI queue (for edge cases the keyword filter misses)
-// Drains at 1 request per 4 seconds = safe under 15 req/min free limit
+// LAYER 2 — Gemini AI queue
 // ─────────────────────────────────────────────────────────────────────────────
 const queue = [];
 let queueTimer = null;
@@ -109,7 +80,7 @@ let queueTimer = null;
 function enqueueAICheck(text, context, onResult) {
   queue.push({ text, context, onResult });
   if (!queueTimer) {
-    queueTimer = setInterval(drainQueue, 4200); // 4.2s = ~14/min, safely under limit
+    queueTimer = setInterval(drainQueue, 4200);
   }
 }
 
@@ -124,70 +95,40 @@ async function drainQueue() {
   job.onResult(result);
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// PUBLIC API
-// ─────────────────────────────────────────────────────────────────────────────
-
-/**
- * Moderate a message.
- * - Keyword check is synchronous and instant.
- * - If it passes keywords, optionally queue for AI (for suspicious-but-ambiguous text).
- * Returns a Promise<{flagged, reason, category}>.
- */
 function moderateMessage(content, history = []) {
-  // Layer 1: instant keyword check
   const kw = keywordCheck(content);
   if (kw.flagged) return Promise.resolve(kw);
 
-  // Layer 2: only queue for AI if message has certain ambiguous signals
-  // This keeps AI calls rare — maybe 1 in 20 messages
   if (process.env.GEMINI_API_KEY && looksAmbiguous(content)) {
-    return new Promise(resolve => {
-      enqueueAICheck(content, history, resolve);
-    });
+    return new Promise(resolve => enqueueAICheck(content, history, resolve));
   }
 
   return Promise.resolve({ flagged: false, reason: '', category: '' });
 }
 
-/**
- * Moderate a listing — always runs both layers since listings are less frequent.
- */
 function moderateListing(data) {
   const text = `${data.title} ${data.description}`;
-
-  // Layer 1
   const kw = keywordCheck(text);
   if (kw.flagged) return Promise.resolve(kw);
 
-  // Layer 2: listings are infrequent so AI-check all of them
   if (process.env.GEMINI_API_KEY) {
-    return new Promise(resolve => {
-      enqueueAICheck(text, [], resolve);
-    });
+    return new Promise(resolve => enqueueAICheck(text, [], resolve));
   }
 
   return Promise.resolve({ flagged: false, reason: '', category: '' });
 }
 
-/**
- * Heuristic: should this message get an AI look?
- * Keeps AI calls rare — triggers only on ambiguous signals.
- */
 function looksAmbiguous(text) {
   const t = text.toLowerCase();
   return (
     t.includes('@') ||
-    t.includes('number') ||
-    t.includes('contact') ||
-    t.includes('reach') ||
+    t.includes('snapchat') ||
+    t.includes('snap') ||
+    t.includes('telegram') ||
     t.includes('outside') ||
-    t.includes('transfer') ||
-    t.includes('account') ||
-    t.includes('payment') ||
     t.includes('exam') ||
     t.includes('assignment') ||
-    /\d{5,}/.test(t)  // any 5+ digit sequence could be a number
+    /\d{10,}/.test(t)
   );
 }
 
@@ -196,17 +137,20 @@ function looksAmbiguous(text) {
 // ─────────────────────────────────────────────────────────────────────────────
 const SYSTEM_PROMPT = `You are a content moderation AI for Bixcart, a student marketplace at Ajayi Crowther University (ACU), Nigeria.
 
-Flag content that:
-- Tries to move conversation off-platform (WhatsApp, Snapchat, Telegram, phone numbers, social handles)
-- Requests off-platform payment (bank transfer, OPay, PalmPay, direct account)
-- Contains prohibited items (weapons, drugs, alcohol, porn, stolen goods, pirated software)
-- Involves academic fraud (exam answers, assignment help for money)
-- Is sexually suggestive or harassing
-- Violates ACU Christian conduct policy
+IMPORTANT CONTEXT:
+- Bixcart is NOT a payment platform. Sellers sharing bank account details for payment is completely normal and allowed.
+- Nigerian slang insults (mumu, ode, olodo, dullard, etc.) are culturally normal and NOT flagged — users can report those themselves.
+- Price negotiation, campus meetup arrangements, and item condition discussion are fine.
 
-Do NOT flag: price negotiation, campus meetup arrangements, item condition discussion.
+Flag ONLY:
+- Trying to move conversation off-platform (WhatsApp, Snapchat, Telegram, Instagram, sharing social handles or phone numbers to bypass the app)
+- Prohibited items (weapons, drugs, alcohol, porn, stolen goods, pirated software)
+- Academic fraud (exam answers, assignment help for money, runz/expo)
+- Sexual solicitation or explicit content
 
-Respond ONLY with JSON: {"flagged": true|false, "reason": "short reason or empty", "category": "contact_bypass|off_platform_payment|prohibited_item|academic_fraud|harassment|adult_content|school_rules or empty"}`;
+Do NOT flag: bank account numbers for payment, insults/slang, tough negotiation, price disputes.
+
+Respond ONLY with JSON: {"flagged": true|false, "reason": "short reason or empty", "category": "contact_bypass|prohibited_item|academic_fraud|adult_content|school_rules or empty"}`;
 
 async function callGemini(text, context) {
   try {
@@ -224,10 +168,7 @@ async function callGemini(text, context) {
       }),
     });
 
-    if (!res.ok) {
-      console.warn('[aiMod] Gemini error:', res.status);
-      return safe();
-    }
+    if (!res.ok) { console.warn('[aiMod] Gemini error:', res.status); return safe(); }
 
     const data   = await res.json();
     const raw    = data.candidates?.[0]?.content?.parts?.[0]?.text?.trim() || '{}';

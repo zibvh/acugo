@@ -74,7 +74,7 @@ function formatDate(d) {
   if (diff < 3600000) return Math.floor(diff/60000) + 'm ago';
   if (diff < 86400000) return Math.floor(diff/3600000) + 'h ago';
   if (diff < 604800000) return Math.floor(diff/86400000) + 'd ago';
-  return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+  return date.toLocaleDateString('en-NG', { month: 'short', day: 'numeric' });
 }
 function formatCurrency(n) { return '₦' + parseFloat(n || 0).toLocaleString('en-NG', { minimumFractionDigits: 0 }); }
 function getInitials(name) { return (name || '').split(' ').map(w => w[0]).join('').toUpperCase().slice(0, 2); }

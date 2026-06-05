@@ -319,8 +319,8 @@
     const tags = [];
     if (state.category) tags.push({ label: state.category, key: 'category' });
     if (state.condition) tags.push({ label: state.condition, key: 'condition' });
-    if (state.min_price) tags.push({ label: `Min $${state.min_price}`, key: 'min_price' });
-    if (state.max_price) tags.push({ label: `Max $${state.max_price}`, key: 'max_price' });
+    if (state.min_price) tags.push({ label: `Min ₦${parseInt(state.min_price).toLocaleString('en-NG')}`, key: 'min_price' });
+    if (state.max_price) tags.push({ label: `Max ₦${parseInt(state.max_price).toLocaleString('en-NG')}`, key: 'max_price' });
     
     document.getElementById('active-filters').innerHTML = tags.map(t =>
       `<div class="active-filter-tag">${t.label}<button onclick="removeFilter('${t.key}')">${icons.x}</button></div>`).join('');

@@ -4,8 +4,7 @@ const bcrypt     = require('bcryptjs');
 const jwt        = require('jsonwebtoken');
 const crypto     = require('crypto');
 const rateLimit  = require('express-rate-limit');
-const { User }   = require('../db/database');
-const { Order, Listing } = require('../db/database');
+const { User, Order, Listing, Waitlist } = require('../db/database');
 const { authMiddleware } = require('../middleware/auth');
 const { sendVerificationEmail, sendPasswordResetEmail } = require('../utils/email');
 
@@ -86,11 +85,14 @@ router.post('/register', authLimiter, async (req, res) => {
     const verifyToken   = randomToken();
     const verifyExpires = new Date(Date.now() + 24 * 60 * 60 * 1000); // 24h
 
-    // First 50 sellers get a bonus: 1 base + 5 extra = 6 free credits
+    // First 50 sellers OR waitlisted emails get 6 free listing credits
     let listingCredits = 0;
     if (role === 'seller') {
-      const sellerCount = await User.countDocuments({ role: 'seller' });
-      listingCredits = sellerCount < 50 ? 6 : 1;
+      const [sellerCount, onWaitlist] = await Promise.all([
+        User.countDocuments({ role: 'seller' }),
+        Waitlist.findOne({ email: email.toLowerCase() }).lean(),
+      ]);
+      listingCredits = (sellerCount < 50 || onWaitlist) ? 6 : 1;
     }
 
     const user = await User.create({
@@ -371,6 +373,25 @@ router.post('/credits/verify', authMiddleware, async (req, res) => {
     console.error('[credits/verify] Exception:', e.message);
     res.status(500).json({ error: e.message });
   }
+});
+
+// POST /api/auth/waitlist — join the waitlist (earns 6 listing credits on signup)
+router.post('/waitlist', async (req, res) => {
+  try {
+    const { email } = req.body;
+    if (!email?.trim()) return res.status(400).json({ error: 'Email is required' });
+    const normalised = email.toLowerCase().trim();
+    // Check already registered
+    const existing = await User.findOne({ email: normalised });
+    if (existing) return res.status(409).json({ error: 'already_registered' });
+    // Upsert into waitlist
+    await Waitlist.findOneAndUpdate(
+      { email: normalised },
+      { email: normalised },
+      { upsert: true, new: true }
+    );
+    res.json({ success: true });
+  } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
 // GET /api/auth/seller-count — public, for first-50 badge display

@@ -63,6 +63,10 @@ listingSchema.index({ status: 1 });
 listingSchema.index({ seller_id: 1 });
 listingSchema.index({ title: 'text', description: 'text' });
 
+const waitlistSchema = new mongoose.Schema({
+  email: { type: String, required: true, unique: true, lowercase: true, trim: true },
+}, { timestamps: { createdAt: 'created_at', updatedAt: false } });
+
 const savedListingSchema = new mongoose.Schema({
   user_id:    { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
   listing_id: { type: mongoose.Schema.Types.ObjectId, ref: 'Listing', required: true },
@@ -133,6 +137,7 @@ orderSchema.index({ seller_id: 1 });
 
 const User               = mongoose.model('User',               userSchema);
 const Listing            = mongoose.model('Listing',            listingSchema);
+const Waitlist           = mongoose.model('Waitlist',           waitlistSchema);
 const SavedListing       = mongoose.model('SavedListing',       savedListingSchema);
 const Conversation       = mongoose.model('Conversation',       conversationSchema);
 const Message            = mongoose.model('Message',            messageSchema);
@@ -146,4 +151,4 @@ async function connectDb() {
   console.log('  MongoDB connected:', mongoose.connection.host);
 }
 
-module.exports = { connectDb, User, Listing, SavedListing, Conversation, Message, ConversationReport, Order };
+module.exports = { connectDb, User, Listing, Waitlist, SavedListing, Conversation, Message, ConversationReport, Order };

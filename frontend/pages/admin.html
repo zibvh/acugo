@@ -359,7 +359,11 @@
 
     /* Flagged cards: stack action buttons below content */
     .flagged-card-inner { flex-direction: column !important; }
-    .flagged-card-actions { flex-direction: row !important; flex-wrap: wrap; gap: 6px !important; min-width: unset !important; }
+    .flagged-card-actions {
+      flex-direction: row !important; flex-wrap: wrap;
+      gap: 6px !important; min-width: unset !important; width: 100% !important;
+    }
+    .flagged-card-actions .action-btn { flex: 1 1 calc(50% - 4px); text-align: center; }
 
     /* Notify grid */
     .notify-grid { grid-template-columns: 1fr; margin: 0 12px 12px; }
@@ -462,9 +466,17 @@
   </div>
 </div>
 
-<!-- MODAL -->
-<div id="modal-root"></div>
-<!-- DRAWER -->
+<!-- STATIC MODAL -->
+<div id="admin-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:9999;align-items:center;justify-content:center;padding:20px;box-sizing:border-box;">
+  <div style="background:var(--surface);border-radius:16px;padding:28px 24px;width:100%;max-width:420px;box-shadow:0 20px 60px rgba(0,0,0,.22);">
+    <button id="admin-modal-back" style="display:flex;align-items:center;gap:5px;background:none;border:none;cursor:pointer;color:var(--ink-3);font-size:13px;font-family:var(--font-body);padding:0 0 16px 0;"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="15 18 9 12 15 6"/></svg>Back</button>
+    <div id="admin-modal-title" style="font-size:17px;font-weight:700;margin-bottom:6px;"></div>
+    <div id="admin-modal-sub"   style="font-size:13px;color:var(--ink-3);margin-bottom:18px;line-height:1.6;"></div>
+    <div id="admin-modal-reason-wrap" style="margin-bottom:16px;"><label style="font-size:12px;font-weight:600;display:block;margin-bottom:5px;">Reason</label><textarea id="admin-modal-reason" rows="3" style="width:100%;padding:10px 12px;border:1.5px solid var(--border);border-radius:var(--radius-md);font-family:var(--font-body);font-size:13px;resize:vertical;outline:none;background:var(--bg);color:var(--ink);box-sizing:border-box;" placeholder="Enter reason…"></textarea></div>
+    <div style="display:flex;justify-content:flex-end;"><button id="admin-modal-confirm" class="btn btn-primary">Confirm</button></div>
+  </div>
+</div>
+<div id="modal-root" style="display:none;"></div>
 <div id="drawer-root"></div>
 
 <script src="../js/app.js"></script>
@@ -603,52 +615,47 @@ function bindPagination(containerId, fetchFn) {
   });
 }
 
-// ── Modal helpers ────────────────────────────────────────────────────────────
+// ── Static Modal — event listeners wired ONCE ────────────────────────────────
+let _modalCb       = null;
+let _modalNoReason = false;
+
 function showModal({ title, sub, placeholder, confirmLabel, confirmClass = 'btn-primary', onConfirm, noReason }) {
-  const root = document.getElementById('modal-root');
-  root.innerHTML = `
-    <div class="modal-overlay" id="modal-overlay">
-      <div class="modal-box" style="position:relative;">
-        <button id="modal-back-btn" style="display:flex;align-items:center;gap:4px;background:none;border:none;cursor:pointer;color:var(--ink-3);font-size:13px;font-family:var(--font-body);padding:0 0 14px 0;">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="15 18 9 12 15 6"/></svg>
-          Back
-        </button>
-        <div class="modal-title">${title}</div>
-        <div class="modal-sub">${sub || ''}</div>
-        ${noReason ? '' : `
-        <label class="modal-label">Reason</label>
-        <textarea class="modal-textarea" id="modal-reason" placeholder="${placeholder || 'Enter reason…'}"></textarea>
-        `}
-        <div class="modal-footer">
-          <button class="btn ${confirmClass}" id="modal-confirm">${confirmLabel}</button>
-        </div>
-      </div>
-    </div>`;
+  _modalCb       = onConfirm;
+  _modalNoReason = !!noReason;
 
-  history.pushState({ bixOverlay: 'modal' }, '');
-
-  document.getElementById('modal-overlay').addEventListener('click', e => {
-    if (e.target.id === 'modal-overlay') closeModal();
-  });
-  document.getElementById('modal-back-btn').addEventListener('click', closeModal);
-  document.getElementById('modal-confirm').addEventListener('click', () => {
-    const reason = noReason ? null : (document.getElementById('modal-reason')?.value?.trim() || '');
-    if (!noReason && !reason) {
-      const ta = document.getElementById('modal-reason');
-      if (ta) ta.style.borderColor = 'var(--red,#e53e3e)';
-      return;
-    }
-    closeModal();
-    onConfirm(reason);
-  });
+  document.getElementById('admin-modal-title').textContent  = title;
+  document.getElementById('admin-modal-sub').textContent    = sub || '';
+  document.getElementById('admin-modal-confirm').textContent = confirmLabel;
+  document.getElementById('admin-modal-confirm').className  = `btn ${confirmClass}`;
+  document.getElementById('admin-modal-reason').placeholder = placeholder || 'Enter reason…';
+  document.getElementById('admin-modal-reason').value       = '';
+  document.getElementById('admin-modal-reason').style.borderColor = '';
+  document.getElementById('admin-modal-reason-wrap').style.display = noReason ? 'none' : 'block';
+  document.getElementById('admin-modal').style.display = 'flex';
+  if (!noReason) document.getElementById('admin-modal-reason').focus();
 }
 
-// IMPORTANT: closeModal and closeDrawer ONLY clear DOM — never call history.back().
-// history.back() causes a race condition when a new overlay opens immediately after.
-// Hardware back is handled exclusively by the popstate listener below.
 function closeModal() {
-  document.getElementById('modal-root').innerHTML = '';
+  document.getElementById('admin-modal').style.display = 'none';
+  _modalCb = null;
 }
+
+// Wire confirm / back ONCE — never re-attached
+document.getElementById('admin-modal-confirm').addEventListener('click', () => {
+  const reason = _modalNoReason ? null : document.getElementById('admin-modal-reason').value.trim();
+  if (!_modalNoReason && !reason) {
+    document.getElementById('admin-modal-reason').style.borderColor = 'var(--red,#e53e3e)';
+    return;
+  }
+  const cb = _modalCb;
+  closeModal();
+  if (cb) cb(reason);
+});
+
+document.getElementById('admin-modal-back').addEventListener('click', closeModal);
+document.getElementById('admin-modal').addEventListener('click', e => {
+  if (e.target === document.getElementById('admin-modal')) closeModal();
+});
 function closeDrawer() {
   document.getElementById('drawer-root').innerHTML = '';
 }
@@ -662,13 +669,10 @@ function showDrawer(html) {
   root.querySelector('.drawer-overlay').addEventListener('click', closeDrawer);
 }
 
-// Hardware back button: close any open overlay instead of navigating away.
-// The browser has already popped the bixOverlay state by the time this fires.
+// Hardware back button: close any open overlay
 window.addEventListener('popstate', () => {
-  const modalRoot  = document.getElementById('modal-root');
-  const drawerRoot = document.getElementById('drawer-root');
-  if (modalRoot?.innerHTML)  { modalRoot.innerHTML  = ''; return; }
-  if (drawerRoot?.innerHTML) { drawerRoot.innerHTML = ''; }
+  if (document.getElementById('admin-modal').style.display !== 'none') { closeModal(); return; }
+  if (document.getElementById('drawer-root').innerHTML) { closeDrawer(); }
 });
 
 // ══════════════════════════════════════════════════════════════════════════════

@@ -86,12 +86,19 @@ router.post('/register', authLimiter, async (req, res) => {
     const verifyToken   = randomToken();
     const verifyExpires = new Date(Date.now() + 24 * 60 * 60 * 1000); // 24h
 
+    // First 50 sellers get a bonus: 1 base + 5 extra = 6 free credits
+    let listingCredits = 0;
+    if (role === 'seller') {
+      const sellerCount = await User.countDocuments({ role: 'seller' });
+      listingCredits = sellerCount < 50 ? 6 : 1;
+    }
+
     const user = await User.create({
       email: email.toLowerCase(),
       full_name,
       role,
       password_hash:         bcrypt.hashSync(password, 12),
-      listing_credits:       role === 'seller' ? 1 : 0,
+      listing_credits:       listingCredits,
       registration_complete: false,
       email_verified:        false,
       email_verify_token:    verifyToken,
@@ -364,6 +371,14 @@ router.post('/credits/verify', authMiddleware, async (req, res) => {
     console.error('[credits/verify] Exception:', e.message);
     res.status(500).json({ error: e.message });
   }
+});
+
+// GET /api/auth/seller-count — public, for first-50 badge display
+router.get('/seller-count', async (req, res) => {
+  try {
+    const count = await User.countDocuments({ role: 'seller' });
+    res.json({ count, bonus_available: count < 50 });
+  } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
 // GET /api/auth/users/:id/profile — public profile (no auth required)

@@ -169,6 +169,7 @@ function renderNav(activePage = '') {
       <div id="nav-user-menu" class="nav-user-menu">
         <a href="${dashHref}" class="nav-user-menu-item">${icons.user} Dashboard</a>
         <a href="/pages/messages.html" class="nav-user-menu-item">${icons.messageCircle} Messages</a>
+        <a href="/pages/wishlist.html" class="nav-user-menu-item"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/></svg> Wishlist</a>
         <div class="nav-user-menu-sep"></div>
         <button class="nav-user-menu-item nav-user-menu-logout" onclick="logout()">${icons.logout} Log out</button>
       </div>
@@ -215,7 +216,9 @@ async function toggleSave(e, id, btn) {
     const r = await api.post(`/listings/${id}/save`);
     btn.classList.toggle('saved', r.saved);
     btn.innerHTML = r.saved ? icons.heartFilled : icons.heart;
-    toast(r.saved ? 'Saved to wishlist' : 'Removed from wishlist', 'success');
+    toast(r.saved ? 'Saved to wishlist ❤️' : 'Removed from wishlist', 'success');
+    // Notify wishlist page if it's listening
+    window.dispatchEvent(new CustomEvent('saveToggled', { detail: { id, saved: r.saved } }));
   } catch (err) { toast(err.message, 'error'); }
 }
 

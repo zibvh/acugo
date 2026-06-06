@@ -65,7 +65,33 @@ router.get('/', optionalAuth, async (req, res) => {
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
-// GET /api/listings/:id
+// GET /api/listings/saved — get current user's saved listings
+router.get('/saved', authMiddleware, async (req, res) => {
+  try {
+    const saves = await SavedListing.find({ user_id: req.user.id })
+      .populate({
+        path: 'listing_id',
+        populate: { path: 'seller_id', select: 'full_name rating rating_count is_verified' },
+      })
+      .sort({ created_at: -1 }).lean();
+
+    const listings = saves
+      .filter(s => s.listing_id && s.listing_id.status === 'active')
+      .map(s => {
+        const l = s.listing_id;
+        return {
+          ...l, id: l._id,
+          saved_at:        s.created_at,
+          seller_name:     l.seller_id?.full_name,
+          seller_rating:   l.seller_id?.rating,
+          seller_verified: l.seller_id?.is_verified,
+          seller_id:       l.seller_id?._id || l.seller_id,
+          is_saved:        true,
+        };
+      });
+    res.json({ listings });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
 router.get('/:id', optionalAuth, async (req, res) => {
   try {
     const listing = await Listing

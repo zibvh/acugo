@@ -42,11 +42,14 @@ if (process.env.NODE_ENV === 'production') {
 
 const PORT = process.env.PORT || 3001;
 
+const { startSweepScheduler } = require('./utils/sweepJob');
+
 connectDb()
   .then(() => {
     app.listen(PORT, () => {
       console.log(`\n  Bixcart running on http://localhost:${PORT}\n`);
-      verifyTransport(); // test SMTP on startup — result logged to console
+      verifyTransport();    // test SMTP on startup
+      startSweepScheduler(); // start 26-hour AI content sweep
     });
   })
   .catch(err => {

@@ -173,7 +173,8 @@
     position: fixed; inset: 0; background: rgba(0,0,0,.3); z-index: 8888;
   }
   .drawer {
-    position: fixed; right: 0; top: 0; height: 100vh; width: 480px; max-width: 95vw;
+    position: fixed; right: 0; top: 0; height: 100vh; height: 100dvh;
+    width: 480px; max-width: 95vw;
     background: var(--surface); border-left: 1.5px solid var(--border);
     z-index: 8889; overflow-y: auto; padding: 0;
     box-shadow: -8px 0 40px rgba(0,0,0,.15);
@@ -232,7 +233,11 @@
   .msg-panel-header h4 { margin: 0 0 2px; font-size: 14px; font-weight: 700; }
   .msg-panel-header p { margin: 0; font-size: 12px; color: var(--ink-3); }
 
-  /* Report detail card */
+  /* Notify panel */
+  .notify-grid {
+    display: grid; grid-template-columns: 1fr 1fr; gap: 12px;
+    margin: 0 18px 16px;
+  }
   .report-detail-card {
     margin: 14px 18px; padding: 14px 16px;
     background: var(--surface); border: 1.5px solid var(--border); border-radius: var(--radius-md);
@@ -266,44 +271,80 @@
   /* ── Loading skeleton ── */
   .tbl-skeleton td { padding: 14px 16px; }
 
-  /* ══════════════════════════════════════════════
-     RESPONSIVE — mobile-first admin
-  ══════════════════════════════════════════════ */
+  /* ══════════════════════════════════════════════════════════
+     RESPONSIVE
+  ══════════════════════════════════════════════════════════ */
+
+  /* Hamburger — hidden on desktop */
   .mob-nav-toggle {
     display: none; background: none; border: none; cursor: pointer;
-    color: white; padding: 8px; border-radius: 6px;
+    color: white; padding: 8px; border-radius: 6px; flex-shrink: 0;
   }
   .mob-nav-toggle:hover { background: rgba(255,255,255,.12); }
+
+  /* Sidebar overlay */
   .sidebar-overlay {
-    display: none; position: fixed; inset: 0; background: rgba(0,0,0,.4); z-index: 1099;
+    display: none; position: fixed; inset: 0;
+    background: rgba(0,0,0,.45); z-index: 1099;
   }
   .sidebar-overlay.open { display: block; }
 
+  /* ── ≤ 900px: collapse sidebar into off-canvas drawer ── */
   @media (max-width: 900px) {
     body { overflow: auto; }
+
+    .admin-layout { flex-direction: column; }
+
     .admin-sidebar {
-      position: fixed; left: -240px; top: 0; z-index: 1100;
-      transition: left .22s ease; height: 100vh;
+      position: fixed; left: -240px; top: 0; bottom: 0;
+      z-index: 1100; transition: left .22s ease;
+      height: 100vh; height: 100dvh;
     }
-    .admin-sidebar.open { left: 0; }
-    .admin-main { width: 100%; height: auto; overflow: visible; }
+    .admin-sidebar.open { left: 0; box-shadow: 4px 0 32px rgba(0,0,0,.3); }
+
+    .admin-main { width: 100%; height: auto; min-height: 100dvh; overflow: visible; }
     .admin-content { padding: 16px; overflow: visible; }
-    .admin-topbar { padding: 0 16px; }
-    .mob-nav-toggle { display: flex; align-items: center; justify-content: center; }
+
+    .admin-topbar { padding: 0 14px; gap: 10px; }
     .admin-topbar-title { font-size: 14px; }
-    .stat-grid { grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 10px; margin-bottom: 20px; }
-    .stat-card { padding: 14px 16px; }
+    .mob-nav-toggle { display: flex; align-items: center; justify-content: center; }
+
+    /* Sign out text → icon only */
+    #admin-signout-btn span { display: none; }
+
+    .stat-grid {
+      grid-template-columns: repeat(auto-fill, minmax(130px, 1fr));
+      gap: 10px; margin-bottom: 16px;
+    }
+    .stat-card { padding: 12px 14px; }
     .stat-card-value { font-size: 22px; }
+    .stat-card-sub { font-size: 11px; }
   }
 
-  /* Tables — horizontal scroll on small screens */
+  /* ── ≤ 768px: table scroll + stacked panels ── */
   @media (max-width: 768px) {
+    .admin-content { padding: 12px; }
+
+    /* Tables scroll horizontally */
     .admin-table-wrap { overflow-x: auto; -webkit-overflow-scrolling: touch; }
-    .admin-table { min-width: 620px; }
+    .admin-table { min-width: 580px; font-size: 12px; }
     .admin-table th, .admin-table td { padding: 10px 12px; }
-    .admin-toolbar { flex-wrap: wrap; }
-    .admin-search { min-width: 100%; }
-    /* Reports layout: stack list above thread panel */
+
+    /* Hide less critical columns */
+    .admin-table .mono { display: none; }
+
+    /* Toolbar wraps */
+    .admin-toolbar { flex-wrap: wrap; gap: 8px; }
+    .admin-search  { min-width: 100%; }
+
+    /* Wrap action buttons */
+    .action-btns { flex-wrap: wrap; gap: 4px; }
+    .action-btn  { font-size: 11px; padding: 4px 8px; }
+
+    /* Drawer full width */
+    .drawer { width: 100%; max-width: 100%; }
+
+    /* Reports / flagged: stack list on top of panel */
     .msg-layout {
       grid-template-columns: 1fr;
       height: auto;
@@ -311,29 +352,27 @@
     .msg-list {
       border-right: none;
       border-bottom: 1.5px solid var(--border);
-      max-height: 280px;
+      max-height: 260px;
       overflow-y: auto;
     }
-    .msg-panel {
-      min-height: 400px;
-    }
-    /* Drawer full-width */
-    .drawer { width: 100%; max-width: 100%; }
+    .msg-panel { min-height: 380px; }
+
+    /* Flagged cards: stack action buttons below content */
+    .flagged-card-inner { flex-direction: column !important; }
+    .flagged-card-actions { flex-direction: row !important; flex-wrap: wrap; gap: 6px !important; min-width: unset !important; }
+
+    /* Notify grid */
+    .notify-grid { grid-template-columns: 1fr; margin: 0 12px 12px; }
   }
 
+  /* ── ≤ 520px: tighten further ── */
   @media (max-width: 520px) {
-    .admin-table { min-width: 480px; }
-    .action-btns { flex-wrap: wrap; }
+    .admin-table { min-width: 440px; }
     .stat-grid { grid-template-columns: 1fr 1fr; }
-    .admin-content { padding: 12px; }
+    .admin-content { padding: 10px; }
+    .stat-card-value { font-size: 20px; }
+    .modal-box { padding: 20px 16px; }
   }
-
-  /* Notify panel */
-  .notify-grid {
-    display: grid; grid-template-columns: 1fr 1fr; gap: 12px;
-    margin: 0 18px 16px;
-  }
-  @media (max-width: 600px) { .notify-grid { grid-template-columns: 1fr; } }
   .notify-card {
     background: var(--surface); border: 1.5px solid var(--border); border-radius: var(--radius-md);
     padding: 14px 15px;
@@ -412,7 +451,10 @@
     <div class="admin-topbar-title" id="topbar-title">Overview</div>
     <div class="admin-topbar-right">
       <span class="admin-badge" id="admin-user-badge">Admin</span>
-      <button class="btn btn-ghost btn-sm" id="admin-signout-btn">Sign out</button>
+      <button class="btn btn-ghost btn-sm" id="admin-signout-btn" style="display:flex;align-items:center;gap:5px;">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
+        <span>Sign out</span>
+      </button>
     </div>
   </div>
   <div class="admin-content" id="admin-content">
@@ -583,49 +625,49 @@ function showModal({ title, sub, placeholder, confirmLabel, confirmClass = 'btn-
       </div>
     </div>`;
 
-  // Push history state so hardware back closes modal instead of leaving page
-  history.pushState({ bixModal: true }, '');
+  history.pushState({ bixOverlay: 'modal' }, '');
 
-  const close = () => {
-    root.innerHTML = '';
-    if (history.state?.bixModal) history.back();
-  };
-
-  document.getElementById('modal-overlay').addEventListener('click', e => { if (e.target.id === 'modal-overlay') close(); });
-  document.getElementById('modal-back-btn').addEventListener('click', close);
+  document.getElementById('modal-overlay').addEventListener('click', e => {
+    if (e.target.id === 'modal-overlay') closeModal();
+  });
+  document.getElementById('modal-back-btn').addEventListener('click', closeModal);
   document.getElementById('modal-confirm').addEventListener('click', () => {
     const reason = noReason ? null : (document.getElementById('modal-reason')?.value?.trim() || '');
-    if (!noReason && !reason) { const ta = document.getElementById('modal-reason'); if(ta) ta.style.borderColor = 'var(--red,#e53e3e)'; return; }
-    root.innerHTML = '';
-    if (history.state?.bixModal) history.back();
+    if (!noReason && !reason) {
+      const ta = document.getElementById('modal-reason');
+      if (ta) ta.style.borderColor = 'var(--red,#e53e3e)';
+      return;
+    }
+    closeModal();
     onConfirm(reason);
   });
 }
-function closeModal() {
-  const root = document.getElementById('modal-root');
-  root.innerHTML = '';
-  if (history.state?.bixModal) history.back();
-}
 
-// ── Drawer helper ────────────────────────────────────────────────────────────
+// IMPORTANT: closeModal and closeDrawer ONLY clear DOM — never call history.back().
+// history.back() causes a race condition when a new overlay opens immediately after.
+// Hardware back is handled exclusively by the popstate listener below.
+function closeModal() {
+  document.getElementById('modal-root').innerHTML = '';
+}
 function closeDrawer() {
   document.getElementById('drawer-root').innerHTML = '';
-  if (history.state?.bixDrawer) history.back();
 }
+
 function showDrawer(html) {
   const root = document.getElementById('drawer-root');
   root.innerHTML = `
     <div class="drawer-overlay" id="drawer-overlay"></div>
     <div class="drawer">${html}</div>`;
-  history.pushState({ bixDrawer: true }, '');
+  history.pushState({ bixOverlay: 'drawer' }, '');
   root.querySelector('.drawer-overlay').addEventListener('click', closeDrawer);
 }
 
-// Hardware back closes any open overlay
+// Hardware back button: close any open overlay instead of navigating away.
+// The browser has already popped the bixOverlay state by the time this fires.
 window.addEventListener('popstate', () => {
   const modalRoot  = document.getElementById('modal-root');
   const drawerRoot = document.getElementById('drawer-root');
-  if (modalRoot?.innerHTML)  { modalRoot.innerHTML = ''; return; }
+  if (modalRoot?.innerHTML)  { modalRoot.innerHTML  = ''; return; }
   if (drawerRoot?.innerHTML) { drawerRoot.innerHTML = ''; }
 });
 
@@ -1404,7 +1446,7 @@ async function loadFlagged(type = 'all') {
         const sName  = escHtml(conv.seller_id?.full_name || 'Seller');
         html += `
           <div style="background:var(--surface);border:1.5px solid #fc8181;border-radius:var(--radius-lg);padding:16px;margin-bottom:12px;">
-            <div style="display:flex;align-items:flex-start;gap:12px;flex-wrap:wrap;">
+            <div class="flagged-card-inner" style="display:flex;align-items:flex-start;gap:12px;flex-wrap:wrap;">
               <div style="flex:1;min-width:160px;">
                 <div style="font-size:13px;font-weight:700;margin-bottom:4px;">${buyer} ↔ ${seller}</div>
                 ${conv.listing_id?.title ? `<div style="font-size:12px;color:var(--ink-3);margin-bottom:6px;">Re: ${escHtml(conv.listing_id.title)}</div>` : ''}
@@ -1415,8 +1457,7 @@ async function loadFlagged(type = 'all') {
                 </div>
                 <div style="font-size:11px;color:var(--ink-3);">Flagged ${fmtTime(conv.ai_flagged_at)}</div>
               </div>
-              <div style="display:flex;flex-direction:column;gap:6px;flex-shrink:0;min-width:130px;">
-                <button class="action-btn restore" onclick="unflagConv('${conv._id}')">✓ Clear flag</button>
+              <div class="flagged-card-actions" style="display:flex;flex-direction:column;gap:6px;flex-shrink:0;min-width:130px;">
                 <button class="action-btn view"    onclick="viewFlaggedConv('${conv._id}')">👁 View thread</button>
                 <button class="action-btn warn"    onclick="warnUser('${bId}','${bName}')">⚠ Warn buyer</button>
                 <button class="action-btn warn"    onclick="warnUser('${sId}','${sName}')">⚠ Warn seller</button>
@@ -1442,7 +1483,7 @@ async function loadFlagged(type = 'all') {
         const sName = escHtml(l.seller_id?.full_name || 'Seller');
         html += `
           <div style="background:var(--surface);border:1.5px solid #fbbf24;border-radius:var(--radius-lg);padding:16px;margin-bottom:12px;">
-            <div style="display:flex;align-items:flex-start;gap:12px;flex-wrap:wrap;">
+            <div class="flagged-card-inner" style="display:flex;align-items:flex-start;gap:12px;flex-wrap:wrap;">
               <div style="width:56px;height:56px;border-radius:8px;overflow:hidden;background:var(--surface-2);flex-shrink:0;display:flex;align-items:center;justify-content:center;">
                 ${l.images?.[0] ? `<img src="${l.images[0]}" style="width:100%;height:100%;object-fit:cover;">` : icons.package}
               </div>
@@ -1455,8 +1496,7 @@ async function loadFlagged(type = 'all') {
                 </div>
                 <div style="font-size:11px;color:var(--ink-3);">Flagged ${fmtTime(l.ai_flagged_at)}</div>
               </div>
-              <div style="display:flex;flex-direction:column;gap:6px;flex-shrink:0;min-width:130px;">
-                <button class="action-btn restore" onclick="unflagListing('${l._id}','restore')">✓ Restore</button>
+              <div class="flagged-card-actions" style="display:flex;flex-direction:column;gap:6px;flex-shrink:0;min-width:130px;">
                 <button class="action-btn kick"    onclick="unflagListing('${l._id}','remove')">✕ Remove</button>
                 <a href="/pages/listing.html?id=${l._id}" target="_blank" class="action-btn view" style="text-decoration:none;text-align:center;">👁 View</a>
                 <button class="action-btn warn"    onclick="warnUser('${sId}','${sName}')">⚠ Warn seller</button>

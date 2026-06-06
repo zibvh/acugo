@@ -1,162 +1,144 @@
 /**
- * AI Content Moderation — Bixcart
- *
- * Architecture:
- * 1. INSTANT keyword filter  — catches ~90% of violations, zero cost, zero latency
- * 2. AI queue (Gemini)       — only called for edge cases; rate-limit safe via queue
- *
- * Free Gemini tier: 15 req/min → queue drains at 1 req/4.2s = ~14/min safely
+ * Bixcart AI Content Moderation
+ * Layer 1: Instant keyword filter (free, no API, catches 90% of violations)
+ * Layer 2: Gemini queue (rate-safe, for ambiguous cases only)
  */
 
 const fetch = require('node-fetch');
 
-// ─────────────────────────────────────────────────────────────────────────────
-// LAYER 1 — Instant keyword filter
-// ─────────────────────────────────────────────────────────────────────────────
-const KEYWORD_RULES = [
+// ── KEYWORD RULES ──────────────────────────────────────────────────────────
+const RULES = [
   {
     category: 'contact_bypass',
-    reason: 'Sharing contact information or trying to move conversation off-platform is not allowed on Bixcart.',
-    patterns: [
-      /\bwhatsapp\b/i, /\bwatsapp\b/i, /\bw[- ]?app\b/i,
-      /\bsnapchat\b/i, /\bmy snap\b/i, /\badd me on snap/i,
-      /\btelegram\b/i,
-      /\b(message|chat|text|reach|contact|hit) me (on|via|at|through)\b/i,
-      /\b(dm|pm) me\b/i,
-      /\boutside (this|the) (app|platform|chat)\b/i,
-      /\boff (this|the) (app|platform)\b/i,
-      /\b0[789][01]\d{8}\b/,
-      /\+?234\d{10}/,
+    reason: 'Sharing contact details or moving conversations off-platform is not allowed.',
+    tests: [
+      t => /whatsapp/i.test(t),
+      t => /watsap/i.test(t),
+      t => /snapchat/i.test(t),
+      t => /\bsnap\b/i.test(t),
+      t => /\btelegram\b/i.test(t),
+      t => /\binstagram\b/i.test(t),
+      t => /\binsta\b/i.test(t),
+      t => /\btiktok\b/i.test(t),
+      t => /\bfacebook\b/i.test(t),
+      t => /\btwitter\b/i.test(t),
+      t => /\b(chat|message|reach|text|contact|dm|pm|hit) me (on|at|via|through)\b/i.test(t),
+      t => /\b(find|add|follow) me on\b/i.test(t),
+      t => /my (snap|ig|insta|telegram|username|handle)\b/i.test(t),
+      t => /\b0[789][01]\d{8}\b/.test(t),   // Nigerian mobile 08xx / 09xx
+      t => /\+?234\d{10}/.test(t),
+      t => /outside (this|the) (app|platform|chat)/i.test(t),
     ],
   },
   {
     category: 'academic_fraud',
-    reason: 'Academic fraud materials are strictly prohibited on Bixcart and violates ACU rules.',
-    patterns: [
-      /\b(sell|selling|buy|buying|have|got)\b.{0,30}\b(exam|test|quiz)\b.{0,20}\b(answer|paper|question|solution)/i,
-      /\b(do|write|complete)\b.{0,20}\b(your |my )?(assignment|project|thesis|coursework)\b.{0,20}\b(for you|for me)?\b.*\b(pay|money|cash|₦|naira)/i,
-      /\bassignment\b.{0,30}\b(for sale|₦|naira|cheap|available)/i,
-      /\bexam (expo|runz|answers|leak)/i,
-      /\b(runs|runz)\b/i,
+    reason: 'Academic fraud materials are strictly prohibited and violate ACU rules.',
+    tests: [
+      t => /\bexam (expo|runz|answers?|leak|questions?)\b/i.test(t),
+      t => /\b(expo|runz)\b/i.test(t),
+      t => /\b(sell|selling|buy|buying|got|have)\b.{0,30}\b(exam|test|quiz)\b.{0,20}\b(answer|paper|question)/i.test(t),
+      t => /\bassignment\b.{0,40}\b(for sale|₦|naira|cheap|sell|pay)/i.test(t),
+      t => /\b(do|write|complete)\b.{0,20}\b(assignment|project|thesis)\b.{0,20}\b(for you|for.*pay|₦)/i.test(t),
     ],
   },
   {
     category: 'prohibited_item',
-    reason: 'This item or substance is prohibited on Bixcart.',
-    patterns: [
-      /\b(sell|selling|buy|buying|available|have|got|supply)\b.{0,25}\b(weed|igbo|loud|colorado|shisha|codeine|tramadol|refnol|mkpuru mmiri|coke|cocaine|heroin|meth)\b/i,
-      /\b(sell|selling|buying|available)\b.{0,25}\b(gun|knife|cutlass|blade|weapon|pistol|rifle|ammo|bullet)\b/i,
-      /\bporn/i,
-      /\bsex (tape|video|clip|movie|content)/i,
+    reason: 'This item is prohibited on Bixcart.',
+    tests: [
+      t => /\b(weed|igbo|loud|colorado|shisha|codeine|tramadol|refnol|mkpuru)\b/i.test(t),
+      t => /\b(cocaine|heroin|meth|crack)\b/i.test(t),
+      t => /\b(gun|pistol|rifle|firearm|ammunition|ammo)\b/i.test(t),
+      t => /\b(sell|selling|supply|get)\b.{0,20}\b(cutlass|blade|weapon|knife)\b/i.test(t),
+      t => /\bporn(ography)?\b/i.test(t),
+      t => /\bsex (tape|video|clip|content)\b/i.test(t),
     ],
   },
   {
     category: 'adult_content',
-    reason: 'Adult or sexual content is not allowed on Bixcart.',
-    patterns: [
-      /\b(hook ?up|link ?up for sex|one night|friends with benefit)\b/i,
-      /\bnude(s)?\b/i,
+    reason: 'Adult content is not allowed on Bixcart.',
+    tests: [
+      t => /\bnude(s)?\b/i.test(t),
+      t => /\bhook[\s-]?up\b/i.test(t),
+      t => /link[\s-]?up for sex/i.test(t),
+      t => /friends with benefits/i.test(t),
+      t => /\bone night stand\b/i.test(t),
     ],
   },
 ];
 
 function keywordCheck(text) {
-  for (const rule of KEYWORD_RULES) {
-    for (const pattern of rule.patterns) {
-      if (pattern.test(text)) {
-        return { flagged: true, reason: rule.reason, category: rule.category };
-      }
+  const t = String(text || '');
+  for (const rule of RULES) {
+    for (const test of rule.tests) {
+      if (test(t)) return { flagged: true, reason: rule.reason, category: rule.category };
     }
   }
   return { flagged: false, reason: '', category: '' };
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// LAYER 2 — Gemini AI queue
-// ─────────────────────────────────────────────────────────────────────────────
+// ── GEMINI QUEUE ────────────────────────────────────────────────────────────
+const SYSTEM_PROMPT = `You moderate Bixcart, a student marketplace at Ajayi Crowther University (ACU), Nigeria.
+
+ALLOWED: Price negotiation, campus meetup plans, item condition questions, bank account details for payment, Nigerian slang/insults.
+
+FLAG ONLY:
+- Moving conversation off-platform (WhatsApp, Snapchat, Telegram, social handles, phone numbers)
+- Prohibited items: weapons, hard drugs (weed, codeine, tramadol), stolen/pirated goods, pornography
+- Academic fraud: selling exam answers, assignment help for money, runz/expo
+- Sexual solicitation
+
+Respond ONLY with JSON: {"flagged":true|false,"reason":"short reason or empty","category":"contact_bypass|prohibited_item|academic_fraud|adult_content or empty"}`;
+
 const queue = [];
-let queueTimer = null;
+let draining = false;
 
-function enqueueAICheck(text, context, onResult) {
-  queue.push({ text, context, onResult });
-  if (!queueTimer) {
-    queueTimer = setInterval(drainQueue, 4200);
-  }
+function enqueue(text, context, resolve) {
+  queue.push({ text, context, resolve });
+  if (!draining) drain();
 }
 
-async function drainQueue() {
-  if (!queue.length) {
-    clearInterval(queueTimer);
-    queueTimer = null;
-    return;
+async function drain() {
+  draining = true;
+  while (queue.length) {
+    const job = queue.shift();
+    const result = await callGemini(job.text, job.context);
+    job.resolve(result);
+    if (queue.length) await sleep(4200); // stay under 15 req/min
   }
-  const job = queue.shift();
-  const result = await callGemini(job.text, job.context);
-  job.onResult(result);
+  draining = false;
 }
+
+function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
 
 function moderateMessage(content, history = []) {
   const kw = keywordCheck(content);
-  if (kw.flagged) return Promise.resolve(kw);
-
-  if (process.env.GEMINI_API_KEY && looksAmbiguous(content)) {
-    return new Promise(resolve => enqueueAICheck(content, history, resolve));
+  if (kw.flagged) {
+    console.log('[aiMod] keyword hit:', kw.category, '—', content.slice(0,60));
+    return Promise.resolve(kw);
   }
-
+  if (!process.env.GEMINI_API_KEY) return Promise.resolve({ flagged: false, reason: '', category: '' });
+  // Only queue for AI if message has ambiguous signals
+  if (/(@|\bsnap\b|\bsocial\b|\bcontact\b|\boutside\b|\bexam\b|\bassignment\b|\d{8,})/i.test(content)) {
+    return new Promise(resolve => enqueue(content, history, resolve));
+  }
   return Promise.resolve({ flagged: false, reason: '', category: '' });
 }
 
 function moderateListing(data) {
   const text = `${data.title} ${data.description}`;
   const kw = keywordCheck(text);
-  if (kw.flagged) return Promise.resolve(kw);
-
-  if (process.env.GEMINI_API_KEY) {
-    return new Promise(resolve => enqueueAICheck(text, [], resolve));
+  if (kw.flagged) {
+    console.log('[aiMod] listing keyword hit:', kw.category);
+    return Promise.resolve(kw);
   }
-
-  return Promise.resolve({ flagged: false, reason: '', category: '' });
+  if (!process.env.GEMINI_API_KEY) return Promise.resolve({ flagged: false, reason: '', category: '' });
+  return new Promise(resolve => enqueue(text, [], resolve));
 }
-
-function looksAmbiguous(text) {
-  const t = text.toLowerCase();
-  return (
-    t.includes('@') ||
-    t.includes('snapchat') ||
-    t.includes('snap') ||
-    t.includes('telegram') ||
-    t.includes('outside') ||
-    t.includes('exam') ||
-    t.includes('assignment') ||
-    /\d{10,}/.test(t)
-  );
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
-// GEMINI CALLER
-// ─────────────────────────────────────────────────────────────────────────────
-const SYSTEM_PROMPT = `You are a content moderation AI for Bixcart, a student marketplace at Ajayi Crowther University (ACU), Nigeria.
-
-IMPORTANT CONTEXT:
-- Bixcart is NOT a payment platform. Sellers sharing bank account details for payment is completely normal and allowed.
-- Nigerian slang insults (mumu, ode, olodo, dullard, etc.) are culturally normal and NOT flagged — users can report those themselves.
-- Price negotiation, campus meetup arrangements, and item condition discussion are fine.
-
-Flag ONLY:
-- Trying to move conversation off-platform (WhatsApp, Snapchat, Telegram, Instagram, sharing social handles or phone numbers to bypass the app)
-- Prohibited items (weapons, drugs, alcohol, porn, stolen goods, pirated software)
-- Academic fraud (exam answers, assignment help for money, runz/expo)
-- Sexual solicitation or explicit content
-
-Do NOT flag: bank account numbers for payment, insults/slang, tough negotiation, price disputes.
-
-Respond ONLY with JSON: {"flagged": true|false, "reason": "short reason or empty", "category": "contact_bypass|prohibited_item|academic_fraud|adult_content|school_rules or empty"}`;
 
 async function callGemini(text, context) {
   try {
-    const contextStr = (context || []).slice(-3).map(m => `${m.role}: ${m.content}`).join('\n');
-    const prompt = `${contextStr ? `Context:\n${contextStr}\n\n` : ''}Content to check: "${text}"\n\nJSON only:`;
-
+    const ctx = (context || []).slice(-3).map(m => `${m.role}: ${m.content}`).join('\n');
+    const prompt = `${ctx ? `Context:\n${ctx}\n\n` : ''}Check this: "${text}"\n\nJSON only:`;
     const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${process.env.GEMINI_API_KEY}`;
     const res = await fetch(url, {
       method: 'POST',
@@ -164,24 +146,20 @@ async function callGemini(text, context) {
       body: JSON.stringify({
         systemInstruction: { parts: [{ text: SYSTEM_PROMPT }] },
         contents: [{ parts: [{ text: prompt }] }],
-        generationConfig: { maxOutputTokens: 120, temperature: 0.1 },
+        generationConfig: { maxOutputTokens: 100, temperature: 0.1 },
       }),
     });
-
-    if (!res.ok) { console.warn('[aiMod] Gemini error:', res.status); return safe(); }
-
-    const data   = await res.json();
-    const raw    = data.candidates?.[0]?.content?.parts?.[0]?.text?.trim() || '{}';
-    const clean  = raw.replace(/^```json|^```|```$/gm, '').trim();
-    const parsed = JSON.parse(clean);
-    if (parsed.flagged) console.log('[aiMod] AI flagged:', parsed.reason);
-    return { flagged: Boolean(parsed.flagged), reason: parsed.reason || '', category: parsed.category || '' };
-  } catch (e) {
-    console.warn('[aiMod] Gemini error:', e.message);
+    if (!res.ok) { console.warn('[aiMod] Gemini', res.status); return safe(); }
+    const data = await res.json();
+    const raw = data.candidates?.[0]?.content?.parts?.[0]?.text?.trim() || '{}';
+    const parsed = JSON.parse(raw.replace(/```json|```/g, '').trim());
+    if (parsed.flagged) console.log('[aiMod] Gemini flagged:', parsed.reason);
+    return { flagged: !!parsed.flagged, reason: parsed.reason || '', category: parsed.category || '' };
+  } catch(e) {
+    console.warn('[aiMod] error:', e.message);
     return safe();
   }
 }
 
 function safe() { return { flagged: false, reason: '', category: '' }; }
-
 module.exports = { moderateMessage, moderateListing, keywordCheck };

@@ -164,7 +164,7 @@
           </div>
           <div style="color:var(--ink-3)">${icons_placeholder_tag}</div>
         </div>
-        ${(user?.listing_credits >= 6) ? `<div style="font-size:12px;background:#d1fae5;color:#065f46;border-radius:8px;padding:7px 11px;margin-bottom:10px;font-weight:600;">🎁 You're one of our first 50 sellers — enjoy 6 free listing credits!</div>` : ''}
+        <div id="credits-bonus-msg"></div>
         <div style="font-size:13px;color:var(--ink-3);margin-bottom:12px;">Each listing costs 1 credit. Buy more below:</div>
         <div class="pricing-tiers" id="pricing-tiers"></div>
       </div>
@@ -224,6 +224,11 @@
 
   // Show cached credits immediately so the display isn't "—" while loading
   document.getElementById('credits-num').textContent = user?.listing_credits ?? '—';
+  // Show first-50 bonus badge if user has 6+ credits (waitlist or early seller)
+  if ((user?.listing_credits ?? 0) >= 6) {
+    const bonusEl = document.getElementById('credits-bonus-msg');
+    if (bonusEl) bonusEl.innerHTML = `<div style="font-size:12px;background:#d1fae5;color:#065f46;border-radius:8px;padding:7px 11px;margin-bottom:10px;font-weight:600;">🎁 You're one of our first 50 sellers — enjoy 6 free listing credits!</div>`;
+  }
 
   document.getElementById('greeting').textContent = `Welcome back, ${user?.full_name?.split(' ')[0]}`;
 
@@ -289,12 +294,11 @@
     } catch(e) {}
   }
 
-  // Pricing tiers (credits) — prices in kobo for Paystack
+  // Pricing tiers — prices in kobo for Paystack (₦500, ₦1,350, ₦4,250)
   const TIERS = [
-    { credits: 1,  price: 60000,   label: '1 listing',   note: 'Extra single' },
-    { credits: 3,  price: 190000,  label: '3 listings',  note: 'Save ~6%' },
-    { credits: 10, price: 600000,  label: '10 listings', note: 'Save ~12%' },
-    { credits: 30, price: 1650000, label: '30 listings', note: 'Best value' },
+    { credits: 1,  price: 50000,  label: '1 listing',   note: 'Single credit' },
+    { credits: 3,  price: 135000, label: '3 listings',  note: 'Save 10%' },
+    { credits: 10, price: 425000, label: '10 listings', note: 'Best value' },
   ];
 
   document.getElementById('pricing-tiers').innerHTML = TIERS.map((t,i) => `

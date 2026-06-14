@@ -213,6 +213,50 @@
     .txn-bar { padding: 9px 12px; gap: 8px; }
     .txn-mark-btn, .txn-rate-btn { font-size: 12px; padding: 6px 12px; }
   }
+
+  /* ── Transaction Bubble ── */
+  .txn-bubble-btn {
+    width: 34px; height: 34px; border-radius: 50%;
+    border: 2px solid var(--border); background: var(--surface);
+    display: flex; align-items: center; justify-content: center;
+    cursor: pointer; transition: border-color .15s, background .15s;
+    flex-shrink: 0; position: relative;
+  }
+  .txn-bubble-btn:hover { border-color: var(--accent); background: var(--bg); }
+  .txn-bubble-btn.status-completed { border-color: #059669; background: #d1fae5; }
+  .txn-bubble-btn.status-cancelled { border-color: #dc2626; background: #fee2e2; }
+  .txn-bubble-btn.status-pending   { border-color: #f59e0b; background: #fef3c7; }
+  .txn-bubble-btn.status-confirmed { border-color: #2563eb; background: #dbeafe; }
+
+  /* ── Outcome Modal ── */
+  .outcome-modal-backdrop {
+    position: fixed; inset: 0; background: rgba(0,0,0,.5);
+    display: flex; align-items: flex-end; justify-content: center;
+    z-index: 9998; padding: 0;
+  }
+  .outcome-modal {
+    background: var(--surface); border-radius: 20px 20px 0 0;
+    padding: 24px 20px 36px; width: 100%; max-width: 480px;
+    box-shadow: 0 -8px 40px rgba(0,0,0,.18);
+    animation: slideUp .22s ease;
+  }
+  .outcome-modal-title { font-size: 17px; font-weight: 800; margin-bottom: 4px; }
+  .outcome-modal-sub { font-size: 13px; color: var(--ink-3); margin-bottom: 20px; line-height: 1.6; }
+  .outcome-btn {
+    width: 100%; padding: 14px 16px; border-radius: var(--radius-md);
+    border: 2px solid var(--border); background: var(--surface);
+    display: flex; align-items: center; gap: 12px;
+    cursor: pointer; margin-bottom: 10px; text-align: left;
+    transition: border-color .12s, background .12s;
+  }
+  .outcome-btn:hover { border-color: var(--accent); background: var(--bg); }
+  .outcome-btn-icon { font-size: 24px; flex-shrink: 0; }
+  .outcome-btn-label { font-size: 15px; font-weight: 700; }
+  .outcome-btn-sub   { font-size: 12px; color: var(--ink-3); margin-top: 2px; }
+  .outcome-btn.completed { border-color: #059669; }
+  .outcome-btn.completed:hover { background: #d1fae5; }
+  .outcome-btn.cancelled { border-color: #dc2626; }
+  .outcome-btn.cancelled:hover { background: #fee2e2; }
   .mobile-back-btn {
     display: none; background: none; border: none;
     cursor: pointer; color: var(--ink); padding: 4px; margin-right: 2px; flex-shrink: 0;
@@ -463,6 +507,9 @@ function buildThreadHTML(conv, otherName) {
       </div>
       <div class="thread-header-actions">
         ${conv?.listing_id ? `<a href="listing.html?id=${conv.listing_id}" class="btn btn-ghost btn-sm" style="display:flex;gap:4px;padding:5px 9px;font-size:12px;">${icons.eye}<span class="t-report-label">Listing</span></a>` : ''}
+        <button class="txn-bubble-btn" id="txn-bubble" title="Transaction status" style="display:none;">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="5" width="20" height="14" rx="2"/><line x1="2" y1="10" x2="22" y2="10"/></svg>
+        </button>
         <button class="t-report-btn" id="t-report" title="Report conversation">
           <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z"/><line x1="4" y1="22" x2="4" y2="15"/></svg>
           <span class="t-report-label">Report</span>
@@ -602,38 +649,63 @@ async function fetchThread(id, silent = false) {
 }
 
 function renderTxnBar(order, convId) {
-  const slot = document.getElementById('txn-bar-slot');
+  const slot   = document.getElementById('txn-bar-slot');
+  const bubble = document.getElementById('txn-bubble');
   if (!slot) return;
-  if (!order || order.status === 'cancelled' || order.status === 'pending') {
+
+  const isBuyer  = order && String(order.buyer_id)  === String(me.id);
+  const isSeller = order && String(order.seller_id) === String(me.id);
+
+  // ── Update bubble visibility & colour ──────────────────────────────────────
+  if (bubble) {
+    if (!order || (!isBuyer && !isSeller)) {
+      bubble.style.display = 'none';
+    } else {
+      bubble.style.display = 'flex';
+      bubble.className = 'txn-bubble-btn status-' + order.status;
+      const bubbleIcons = {
+        pending:   '🕐', confirmed: '🤝', completing: '⏳',
+        completed: '✅', cancelled: '❌',
+      };
+      bubble.title = 'Transaction: ' + (order.status.charAt(0).toUpperCase() + order.status.slice(1));
+      bubble.innerHTML = `<span style="font-size:15px;">${bubbleIcons[order.status] || '📦'}</span>`;
+      // Remove old listener by replacing node
+      const fresh = bubble.cloneNode(true);
+      bubble.parentNode.replaceChild(fresh, bubble);
+      fresh.addEventListener('click', () => openOutcomeModal(order, convId));
+    }
+  }
+
+  if (!order || order.status === 'pending') {
     slot.innerHTML = '';
     return;
   }
 
-  const isBuyer  = String(order.buyer_id)  === String(me.id);
-  const isSeller = String(order.seller_id) === String(me.id);
-  if (!isBuyer && !isSeller) { slot.innerHTML = ''; return; }
+  const isBuyerP  = String(order.buyer_id)  === String(me.id);
+  const isSellrP  = String(order.seller_id) === String(me.id);
+  if (!isBuyerP && !isSellrP) { slot.innerHTML = ''; return; }
 
   const statusLabels = {
-    confirmed:  { icon: '🤝', text: 'Order confirmed', color: '#2563eb' },
-    completing: { icon: '⏳', text: 'Completing…',     color: '#d69e2e' },
-    completed:  { icon: '✅', text: 'Transaction complete', color: '#059669' },
+    confirmed:  { icon: '🤝', text: 'Order confirmed',      color: '#2563eb' },
+    completing: { icon: '⏳', text: 'Completing…',           color: '#d69e2e' },
+    completed:  { icon: '✅', text: 'Transaction complete',  color: '#059669' },
+    cancelled:  { icon: '❌', text: 'Deal cancelled',        color: '#dc2626' },
   };
   const sl = statusLabels[order.status] || { icon: '📦', text: order.status, color: 'var(--ink-3)' };
 
-  // Has this user already marked complete?
-  const myMarked  = isBuyer ? order.buyer_marked_complete : order.seller_marked_complete;
+  const myMarked = isBuyerP ? order.buyer_marked_complete : order.seller_marked_complete;
   const price = '₦' + parseFloat(order.amount || 0).toLocaleString('en-NG', { minimumFractionDigits: 0 });
 
   let actionHTML = '';
-  if (order.status === 'completed') {
-    if (isBuyer) {
+  if (order.status === 'completed' || order.status === 'cancelled') {
+    if (isBuyerP) {
       actionHTML = order.buyer_rating
         ? `<div class="txn-already-rated">${'★'.repeat(order.buyer_rating)} Rated</div>`
         : `<button class="txn-rate-btn" id="txn-rate-btn">★ Rate Seller</button>`;
     }
   } else if (order.status === 'confirmed' || order.status === 'completing') {
     actionHTML = myMarked
-      ? `<button class="txn-mark-btn waiting" disabled>⏳ Waiting for ${isBuyer ? 'seller' : 'buyer'}</button>`
+      ? `<button class="txn-mark-btn waiting" disabled>⏳ Waiting for ${isBuyerP ? 'seller' : 'buyer'}</button>`
       : `<button class="txn-mark-btn" id="txn-complete-btn">
            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>
            Mark Complete
@@ -655,7 +727,6 @@ function renderTxnBar(order, convId) {
       <div class="txn-bar-actions">${actionHTML}</div>
     </div>`;
 
-  // Wire complete button
   const completeBtn = document.getElementById('txn-complete-btn');
   if (completeBtn) {
     completeBtn.addEventListener('click', async () => {
@@ -665,7 +736,6 @@ function renderTxnBar(order, convId) {
         const result = await api.post(`/orders/${order.id}/mark-complete`, {});
         toast('Marked complete!', 'success');
         if (result.needs_rating) {
-          // Refresh bar first, then open modal
           await fetchThread(convId, true);
           openInlineRatingModal(order.id, convId);
         } else {
@@ -679,11 +749,100 @@ function renderTxnBar(order, convId) {
     });
   }
 
-  // Wire rate button
   const rateBtn = document.getElementById('txn-rate-btn');
   if (rateBtn) {
     rateBtn.addEventListener('click', () => openInlineRatingModal(order.id, convId));
   }
+}
+
+/* ═══════════ OUTCOME MODAL (bubble click) ═══════════ */
+function openOutcomeModal(order, convId) {
+  const existing = document.getElementById('outcome-modal-backdrop');
+  if (existing) existing.remove();
+
+  const isBuyer = String(order.buyer_id) === String(me.id);
+  const alreadyDone = order.status === 'completed' || order.status === 'cancelled';
+
+  const backdrop = document.createElement('div');
+  backdrop.className = 'outcome-modal-backdrop';
+  backdrop.id = 'outcome-modal-backdrop';
+
+  const price = '₦' + parseFloat(order.amount || 0).toLocaleString('en-NG', { minimumFractionDigits: 0 });
+
+  if (alreadyDone) {
+    const icons = { completed: '✅', cancelled: '❌' };
+    const colors = { completed: '#059669', cancelled: '#dc2626' };
+    backdrop.innerHTML = `
+      <div class="outcome-modal">
+        <div style="width:36px;height:4px;border-radius:2px;background:var(--border);margin:0 auto 18px;"></div>
+        <div class="outcome-modal-title">Transaction Status</div>
+        <div class="outcome-modal-sub">This deal is already <strong style="color:${colors[order.status]}">${order.status}</strong>.</div>
+        <div style="text-align:center;font-size:48px;margin:16px 0;">${icons[order.status]}</div>
+        <div style="text-align:center;font-size:13px;color:var(--ink-3);margin-bottom:20px;">Amount: ${price}</div>
+        ${order.status === 'completed' && isBuyer && !order.buyer_rating
+          ? `<button id="oc-rate" class="btn btn-primary" style="width:100%;justify-content:center;">★ Rate your seller</button>` : ''}
+        <button id="oc-close" class="btn btn-ghost btn-sm" style="width:100%;justify-content:center;margin-top:10px;">Close</button>
+      </div>`;
+    document.body.appendChild(backdrop);
+    history.pushState({ modal: 'outcome' }, '');
+    const close = () => { backdrop.remove(); if (history.state?.modal === 'outcome') history.back(); };
+    backdrop.querySelector('#oc-close').addEventListener('click', close);
+    backdrop.addEventListener('click', e => { if (e.target === backdrop) close(); });
+    const rateBtn = backdrop.querySelector('#oc-rate');
+    if (rateBtn) rateBtn.addEventListener('click', () => { close(); openInlineRatingModal(order.id, convId); });
+    return;
+  }
+
+  backdrop.innerHTML = `
+    <div class="outcome-modal">
+      <div style="width:36px;height:4px;border-radius:2px;background:var(--border);margin:0 auto 18px;"></div>
+      <div class="outcome-modal-title">What happened?</div>
+      <div class="outcome-modal-sub">Mark what actually happened with this deal (${price}). Both parties will see the update.</div>
+      <button class="outcome-btn completed" id="oc-complete">
+        <span class="outcome-btn-icon">✅</span>
+        <div>
+          <div class="outcome-btn-label">Deal completed</div>
+          <div class="outcome-btn-sub">We met and the transaction went through successfully</div>
+        </div>
+      </button>
+      <button class="outcome-btn cancelled" id="oc-cancel">
+        <span class="outcome-btn-icon">❌</span>
+        <div>
+          <div class="outcome-btn-label">Deal cancelled</div>
+          <div class="outcome-btn-sub">The transaction didn't happen — listing will go back to active</div>
+        </div>
+      </button>
+      <button id="oc-dismiss" style="width:100%;padding:11px;border:none;background:none;cursor:pointer;font-size:13px;color:var(--ink-3);font-family:var(--font-body);margin-top:4px;">Not yet — still talking</button>
+    </div>`;
+
+  document.body.appendChild(backdrop);
+  history.pushState({ modal: 'outcome' }, '');
+
+  const close = () => { backdrop.remove(); if (history.state?.modal === 'outcome') history.back(); };
+  backdrop.querySelector('#oc-dismiss').addEventListener('click', close);
+  backdrop.addEventListener('click', e => { if (e.target === backdrop) close(); });
+
+  async function resolve(outcome) {
+    const btn = backdrop.querySelector(outcome === 'completed' ? '#oc-complete' : '#oc-cancel');
+    btn.style.opacity = '.6'; btn.style.pointerEvents = 'none';
+    try {
+      const result = await api.post(`/orders/${order.id}/resolve`, { outcome });
+      close();
+      toast(outcome === 'completed' ? 'Deal marked complete! 🎉' : 'Deal marked cancelled.', outcome === 'completed' ? 'success' : 'info');
+      if (result.needs_rating) {
+        await fetchThread(convId, true);
+        openInlineRatingModal(order.id, convId);
+      } else {
+        await fetchThread(convId, true);
+      }
+    } catch(e) {
+      toast(e.message, 'error');
+      btn.style.opacity = ''; btn.style.pointerEvents = '';
+    }
+  }
+
+  backdrop.querySelector('#oc-complete').addEventListener('click', () => resolve('completed'));
+  backdrop.querySelector('#oc-cancel').addEventListener('click',   () => resolve('cancelled'));
 }
 
 /* ═══════════ SEND MESSAGE ═══════════ */
@@ -889,10 +1048,12 @@ function openReportModal(convId) {
 
 window.addEventListener('popstate', () => {
   // Close any open modal on system/hardware back
-  const rating = document.getElementById('rating-modal-root');
-  const report = document.getElementById('report-modal-backdrop');
-  if (rating) { rating.remove(); return; }
-  if (report) { report.remove(); return; }
+  const rating  = document.getElementById('rating-modal-root');
+  const report  = document.getElementById('report-modal-backdrop');
+  const outcome = document.getElementById('outcome-modal-backdrop');
+  if (rating)  { rating.remove();  return; }
+  if (report)  { report.remove();  return; }
+  if (outcome) { outcome.remove(); return; }
 });
 
 window.addEventListener('beforeunload', () => { clearInterval(pollTimer); stopConvListPoll(); });

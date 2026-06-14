@@ -92,6 +92,30 @@
   .listing-title-row { font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .listing-detail { font-size: 13px; color: var(--ink-3); margin-top: 2px; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
   .listing-actions { display: flex; gap: 6px; flex-shrink: 0; }
+
+  /* ── Dashboard tabs ── */
+  .sd-tab { transition: color .12s, border-color .12s; }
+  .sd-tab.active { color: var(--ink) !important; border-bottom-color: var(--ink) !important; }
+  .sd-tab:hover  { color: var(--ink) !important; }
+
+  /* ── Order rows ── */
+  .order-row { display: flex; align-items: center; gap: 14px; padding: 14px 0; border-bottom: 1px solid var(--border); }
+  .order-row:last-child { border-bottom: none; }
+  .order-thumb { width: 44px; height: 44px; border-radius: var(--radius-md); background: var(--surface-2); overflow: hidden; flex-shrink: 0; display: flex; align-items: center; justify-content: center; color: var(--ink-3); }
+  .order-thumb img { width: 100%; height: 100%; object-fit: cover; }
+  .order-meta { flex: 1; min-width: 0; }
+  .order-title { font-size: 13px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .order-sub   { font-size: 12px; color: var(--ink-3); margin-top: 2px; }
+  .order-status-chip {
+    font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: .05em;
+    padding: 3px 8px; border-radius: 20px; flex-shrink: 0;
+  }
+  .chip-pending   { background: #fef3c7; color: #92400e; }
+  .chip-confirmed { background: #dbeafe; color: #1e40af; }
+  .chip-completing{ background: #fffbeb; color: #92400e; }
+  .chip-completed { background: #d1fae5; color: #065f46; }
+  .chip-cancelled { background: #fee2e2; color: #991b1b; }
+  .order-filter-btn.active { background: var(--ink); color: white !important; border-color: var(--ink); }
   @media(max-width: 900px) {
     .dash-grid { grid-template-columns: 1fr; }
     .stats-row { grid-template-columns: 1fr 1fr; }
@@ -205,18 +229,38 @@
       </div>
     </div>
 
-    <!-- LISTINGS -->
+    <!-- LISTINGS + ORDERS -->
     <div>
-      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;">
-        <h2 style="font-family:var(--font-display);font-size:20px;letter-spacing:-.5px;">My Listings</h2>
-        <div style="display:flex;gap:8px;">
-          <button class="btn btn-ghost btn-sm filter-btn active" data-filter="all" onclick="setFilter('all',this)">All</button>
-          <button class="btn btn-ghost btn-sm filter-btn" data-filter="active" onclick="setFilter('active',this)">Active</button>
-          <button class="btn btn-ghost btn-sm filter-btn" data-filter="sold" onclick="setFilter('sold',this)">Sold</button>
+      <!-- Section tabs -->
+      <div style="display:flex;gap:0;border-bottom:2px solid var(--border);margin-bottom:16px;">
+        <button class="sd-tab active" data-tab="listings" onclick="switchTab('listings',this)" style="padding:8px 16px;font-size:14px;font-weight:700;background:none;border:none;cursor:pointer;border-bottom:2px solid transparent;margin-bottom:-2px;color:var(--ink-3);transition:color .12s;">My Listings</button>
+        <button class="sd-tab" data-tab="orders" onclick="switchTab('orders',this)" style="padding:8px 16px;font-size:14px;font-weight:700;background:none;border:none;cursor:pointer;border-bottom:2px solid transparent;margin-bottom:-2px;color:var(--ink-3);transition:color .12s;">Orders</button>
+      </div>
+
+      <!-- Listings panel -->
+      <div id="tab-listings">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;">
+          <div style="display:flex;gap:8px;">
+            <button class="btn btn-ghost btn-sm filter-btn active" data-filter="all" onclick="setFilter('all',this)">All</button>
+            <button class="btn btn-ghost btn-sm filter-btn" data-filter="active" onclick="setFilter('active',this)">Active</button>
+            <button class="btn btn-ghost btn-sm filter-btn" data-filter="sold" onclick="setFilter('sold',this)">Sold</button>
+          </div>
+        </div>
+        <div class="card" style="padding:0 20px;" id="listings-container">
+          <div style="padding:40px;text-align:center;color:var(--ink-3);">Loading…</div>
         </div>
       </div>
-      <div class="card" style="padding:0 20px;" id="listings-container">
-        <div style="padding:40px;text-align:center;color:var(--ink-3);">Loading…</div>
+
+      <!-- Orders panel -->
+      <div id="tab-orders" style="display:none;">
+        <div style="display:flex;gap:8px;margin-bottom:12px;">
+          <button class="btn btn-ghost btn-sm order-filter-btn active" data-of="pending" onclick="setOrderFilter('pending',this)">Pending</button>
+          <button class="btn btn-ghost btn-sm order-filter-btn" data-of="completed" onclick="setOrderFilter('completed',this)">Completed</button>
+          <button class="btn btn-ghost btn-sm order-filter-btn" data-of="cancelled" onclick="setOrderFilter('cancelled',this)">Cancelled</button>
+        </div>
+        <div class="card" style="padding:0 20px;" id="orders-container">
+          <div style="padding:40px;text-align:center;color:var(--ink-3);">Loading orders…</div>
+        </div>
       </div>
     </div>
   </div>
@@ -413,6 +457,67 @@
     currentFilter = f;
     document.querySelectorAll('.filter-btn').forEach(b => b.classList.toggle('active', b === btn));
     renderListings();
+  }
+
+  /* ── Tab switching ── */
+  let ordersLoaded = false;
+  function switchTab(tab, btn) {
+    document.querySelectorAll('.sd-tab').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    document.getElementById('tab-listings').style.display = tab === 'listings' ? '' : 'none';
+    document.getElementById('tab-orders').style.display   = tab === 'orders'   ? '' : 'none';
+    if (tab === 'orders' && !ordersLoaded) { ordersLoaded = true; loadOrders(); }
+  }
+
+  let allOrders = [], currentOrderFilter = 'pending';
+  async function loadOrders() {
+    const el = document.getElementById('orders-container');
+    el.innerHTML = '<div style="padding:40px;text-align:center;color:var(--ink-3);">Loading…</div>';
+    try {
+      allOrders = await api.get('/orders/selling');
+      renderOrders();
+    } catch(e) {
+      el.innerHTML = `<div style="padding:32px;text-align:center;color:var(--ink-3);">Could not load orders.</div>`;
+    }
+  }
+
+  function setOrderFilter(f, btn) {
+    currentOrderFilter = f;
+    document.querySelectorAll('.order-filter-btn').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    renderOrders();
+  }
+
+  function renderOrders() {
+    const el = document.getElementById('orders-container');
+    // Pending = anything not completed or cancelled (pending, confirmed, completing)
+    const filtered = currentOrderFilter === 'pending'
+      ? allOrders.filter(o => !['completed','cancelled'].includes(o.status))
+      : allOrders.filter(o => o.status === currentOrderFilter);
+
+    if (!filtered.length) {
+      el.innerHTML = `<div style="padding:40px;text-align:center;color:var(--ink-3);">No ${currentOrderFilter} orders.</div>`;
+      return;
+    }
+
+    const chipClass = { pending:'chip-pending', confirmed:'chip-confirmed', completing:'chip-completing', completed:'chip-completed', cancelled:'chip-cancelled' };
+    const chipLabel = { pending:'Pending', confirmed:'Confirmed', completing:'Completing', completed:'Completed', cancelled:'Cancelled' };
+
+    el.innerHTML = filtered.map(o => {
+      const img = o.listing_images?.[0] ? `<img src="${o.listing_images[0]}" alt="">` : icons.package;
+      const chip = `<span class="order-status-chip ${chipClass[o.status]||''}">${chipLabel[o.status]||o.status}</span>`;
+      const price = '₦' + parseFloat(o.amount||0).toLocaleString('en-NG',{minimumFractionDigits:0});
+      const chatHref = `messages.html?conv=`;
+      return `<div class="order-row">
+        <div class="order-thumb">${img}</div>
+        <div class="order-meta">
+          <div class="order-title">${o.listing_title || 'Listing'}</div>
+          <div class="order-sub">Buyer: ${o.buyer_name || 'Unknown'} · ${price} · ${formatDate(o.created_at)}</div>
+        </div>
+        ${chip}
+        <a href="messages.html" class="btn btn-ghost btn-sm btn-icon" title="Open chat">${icons.messageCircle}</a>
+      </div>`;
+    }).join('');
   }
 
   function renderListings() {

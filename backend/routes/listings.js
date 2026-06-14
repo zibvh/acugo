@@ -96,7 +96,7 @@ router.get('/:id', optionalAuth, async (req, res) => {
   try {
     const listing = await Listing
       .findById(req.params.id)
-      .populate('seller_id', 'full_name rating rating_count bio is_verified created_at')
+      .populate('seller_id', 'full_name rating rating_count bio is_verified created_at university')
       .lean();
 
     if (!listing) return res.status(404).json({ error: 'Listing not found' });
@@ -123,6 +123,8 @@ router.get('/:id', optionalAuth, async (req, res) => {
       seller_bio:          s.bio,
       seller_verified:     s.is_verified,
       seller_joined:       s.created_at,
+      seller_university:  s.university,
+      campus:              s.university,
       is_saved,
       related: related.map(r => ({ ...r, id: r._id, seller_name: r.seller_id?.full_name })),
     });
@@ -141,12 +143,15 @@ router.post('/', authMiddleware, async (req, res) => {
     if (!title || !description || !price || !category || !condition)
       return res.status(400).json({ error: 'Missing required fields' });
 
+    if (Array.isArray(images) && images.length > 5)
+      return res.status(400).json({ error: 'Maximum 5 photos allowed per listing' });
+
     const listing = await Listing.create({
       seller_id: req.user.id, title, description,
       price: parseFloat(price),
       original_price: original_price ? parseFloat(original_price) : null,
       category, condition,
-      images: Array.isArray(images) ? images : [],
+      images: Array.isArray(images) ? images.slice(0, 5) : [],
     });
 
     // Deduct one credit
@@ -194,9 +199,12 @@ router.put('/:id', authMiddleware, async (req, res) => {
       return res.status(403).json({ error: 'Listings can only be edited within 90 minutes of being created.' });
 
     const { title, description, price, original_price, category, condition, status, images } = req.body;
+    if (Array.isArray(images) && images.length > 5)
+      return res.status(400).json({ error: 'Maximum 5 photos allowed per listing' });
+
     const updated = await Listing.findByIdAndUpdate(
       req.params.id,
-      { $set: { title, description, price: parseFloat(price), original_price: original_price ? parseFloat(original_price) : null, category, condition, ...(status ? { status } : {}), ...(Array.isArray(images) ? { images } : {}) } },
+      { $set: { title, description, price: parseFloat(price), original_price: original_price ? parseFloat(original_price) : null, category, condition, ...(status ? { status } : {}), ...(Array.isArray(images) ? { images: images.slice(0, 5) } : {}) } },
       { new: true }
     ).lean();
     res.json({ ...updated, id: updated._id });

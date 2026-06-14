@@ -170,6 +170,38 @@ router.post('/:id/mark-complete', authMiddleware, async (req, res) => {
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
+// POST /api/orders/:id/resolve — buyer or seller marks deal as completed or cancelled from chat bubble
+router.post('/:id/resolve', authMiddleware, async (req, res) => {
+  try {
+    const uid   = req.user.id;
+    const { outcome } = req.body; // 'completed' or 'cancelled'
+    if (!['completed','cancelled'].includes(outcome))
+      return res.status(400).json({ error: 'outcome must be completed or cancelled' });
+
+    const order = await Order.findById(req.params.id);
+    if (!order) return res.status(404).json({ error: 'Order not found' });
+
+    const isBuyer  = String(order.buyer_id)  === String(uid);
+    const isSeller = String(order.seller_id) === String(uid);
+    if (!isBuyer && !isSeller) return res.status(403).json({ error: 'Forbidden' });
+
+    if (order.status === 'completed' || order.status === 'cancelled')
+      return res.status(400).json({ error: `Order already ${order.status}` });
+
+    const update = { status: outcome };
+    if (outcome === 'completed') {
+      update.buyer_marked_complete  = true;
+      update.seller_marked_complete = true;
+      await Listing.findByIdAndUpdate(order.listing_id, { $set: { status: 'sold' } });
+    } else {
+      await Listing.findByIdAndUpdate(order.listing_id, { $set: { status: 'active' } });
+    }
+
+    const updated = await Order.findByIdAndUpdate(req.params.id, { $set: update }, { new: true });
+    res.json({ ...updated.toObject(), id: updated._id, needs_rating: isBuyer });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
 // POST /api/orders/:id/rate — buyer rates seller after order completes
 router.post('/:id/rate', authMiddleware, async (req, res) => {
   try {
@@ -182,8 +214,8 @@ router.post('/:id/rate', authMiddleware, async (req, res) => {
     if (!order) return res.status(404).json({ error: 'Order not found' });
     if (String(order.buyer_id) !== String(uid))
       return res.status(403).json({ error: 'Only the buyer can rate this order' });
-    if (order.status !== 'completed')
-      return res.status(400).json({ error: 'Order must be completed first' });
+    if (order.status !== 'completed' && order.status !== 'cancelled')
+      return res.status(400).json({ error: 'Order must be completed or cancelled first' });
     if (order.buyer_rating)
       return res.status(409).json({ error: 'You have already rated this order' });
 

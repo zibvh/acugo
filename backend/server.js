@@ -2,7 +2,8 @@ require('dotenv').config();
 const express = require('express');
 const cors    = require('cors');
 const path    = require('path');
-const { connectDb } = require('./db/database');
+const fs      = require('fs');
+const { connectDb, Listing } = require('./db/database');
 const { verifyTransport } = require('./utils/email');
 
 const app = express();
@@ -13,6 +14,55 @@ app.set('trust proxy', 1);
 app.use(cors({ origin: process.env.FRONTEND_URL || '*' }));
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
+
+// ─── Dynamic OG/SEO tags for shared listing links ─────────────────────────────
+// Crawlers (WhatsApp, Twitter/X, Facebook, Telegram, etc.) don't run JS, so the
+// listing page's <meta> tags need to be filled in server-side based on ?id=.
+function escapeHtml(str) {
+  return String(str ?? '')
+    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+}
+
+app.get('/pages/listing.html', async (req, res, next) => {
+  try {
+    const id = req.query.id;
+    const filePath = path.join(__dirname, '../frontend/pages/listing.html');
+    let html = fs.readFileSync(filePath, 'utf8');
+
+    if (id) {
+      const listing = await Listing.findById(id).populate('seller_id', 'full_name').lean();
+      if (listing) {
+        const siteUrl   = process.env.FRONTEND_URL || 'https://bixcart.onrender.com';
+        const sellerName = listing.seller_id?.full_name || 'an ACU student';
+        const title    = `${listing.title} — ₦${Number(listing.price).toLocaleString('en-NG')}`;
+        const pageTitle = `${title} | Bixcart`;
+        const description = `Buy "${listing.title}" from ${sellerName} on Bixcart — ₦${Number(listing.price).toLocaleString('en-NG')}. ${listing.description || ''}`.slice(0, 200).trim();
+        const image    = listing.images?.[0] || `${siteUrl}/og-image.png`;
+        const pageUrl  = `${siteUrl}/pages/listing.html?id=${id}`;
+
+        html = html
+          .replace(/<title>.*?<\/title>/, `<title>${escapeHtml(pageTitle)}</title>`)
+          .replace(/<meta name="description" content=".*?">/, `<meta name="description" content="${escapeHtml(description)}">`)
+          .replace(/<meta property="og:title" content=".*?">/, `<meta property="og:title" content="${escapeHtml(title)}">`)
+          .replace(/<meta property="og:description" content=".*?">/, `<meta property="og:description" content="${escapeHtml(description)}">`)
+          .replace(/<meta property="og:url" content=".*?">/, `<meta property="og:url" content="${escapeHtml(pageUrl)}">`)
+          .replace(/<meta property="og:image" content=".*?">/, `<meta property="og:image" content="${escapeHtml(image)}">`)
+          .replace(/<meta property="og:image:width" content=".*?">/, '')
+          .replace(/<meta property="og:image:height" content=".*?">/, '')
+          .replace(/<meta property="og:image:alt" content=".*?">/, `<meta property="og:image:alt" content="${escapeHtml(listing.title)}">`)
+          .replace(/<meta name="twitter:title" content=".*?">/, `<meta name="twitter:title" content="${escapeHtml(title)}">`)
+          .replace(/<meta name="twitter:description" content=".*?">/, `<meta name="twitter:description" content="${escapeHtml(description)}">`)
+          .replace(/<meta name="twitter:image" content=".*?">/, `<meta name="twitter:image" content="${escapeHtml(image)}">`);
+      }
+    }
+
+    res.set('Content-Type', 'text/html');
+    res.send(html);
+  } catch (e) {
+    next(); // fall through to static file on error
+  }
+});
 
 // Serve frontend in production
 if (process.env.NODE_ENV === 'production') {

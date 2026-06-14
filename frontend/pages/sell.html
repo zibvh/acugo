@@ -129,7 +129,7 @@
             <input type="file" id="file-input" multiple accept="image/*">
             <div class="img-upload-icon" id="upload-icon-el"></div>
             <div class="img-upload-label">Drop photos here or click to upload</div>
-            <div class="img-upload-sub">Up to 6 photos · JPG, PNG, WEBP · Max 5MB each</div>
+            <div class="img-upload-sub">Up to 5 photos · JPG, PNG, WEBP · Max 5MB each</div>
           </div>
           <div class="img-previews" id="img-previews"></div>
         </div>
@@ -409,8 +409,8 @@
   });
 
   function handleFiles(files) {
-    if (uploadedImages.length >= 6) { toast('Maximum 6 photos allowed', 'warning'); return; }
-    Array.from(files).slice(0, 6 - uploadedImages.length).forEach(async file => {
+    if (uploadedImages.length >= 5) { toast('Maximum 5 photos allowed', 'warning'); return; }
+    Array.from(files).slice(0, 5 - uploadedImages.length).forEach(async file => {
       if (!file.type.startsWith('image/')) return;
       // Upload immediately to Cloudinary
       const formData = new FormData();

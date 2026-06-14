@@ -23,11 +23,14 @@ router.get('/conversations', authMiddleware, async (req, res) => {
       const unread   = await Message.countDocuments({ conversation_id: c._id, receiver_id: uid, is_read: false });
       return {
         ...c, id: c._id,
+        seller_id:      c.seller_id?._id || c.seller_id,
+        buyer_id:       c.buyer_id?._id  || c.buyer_id,
         other_user:     { id: otherDoc?._id, name: otherDoc?.full_name || 'Unknown' },
         listing_title:  c.listing_id?.title  || null,
         listing_id:     c.listing_id?._id    || null,
         listing_images: c.listing_id?.images || [],
         unread_count:   unread,
+        txn_status:     c.txn_status || 'pending',
       };
     }));
     res.json(enriched);
@@ -89,6 +92,8 @@ router.get('/conversations/:id', authMiddleware, async (req, res) => {
       ai_flagged:       conv.ai_flagged       || false,
       ai_flag_reason:   conv.ai_flag_reason   || '',
       ai_flag_category: conv.ai_flag_category || '',
+      txn_status:       conv.txn_status       || 'pending',
+      buyer_rated:      conv.buyer_rated       || false,
     });
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
@@ -219,6 +224,57 @@ router.post('/send', authMiddleware, async (req, res) => {
       message: { ...populated, id: populated._id, sender_name: populated.sender_id?.full_name },
       conversation_id: convDoc._id,
     });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// POST /api/messages/conversations/:id/txn-status — set conversation transaction status
+router.post('/conversations/:id/txn-status', authMiddleware, async (req, res) => {
+  try {
+    const uid = req.user.id;
+    const { status } = req.body;
+    if (!['pending','completed','cancelled'].includes(status))
+      return res.status(400).json({ error: 'status must be pending, completed, or cancelled' });
+
+    const conv = await Conversation.findOne({
+      _id: req.params.id,
+      $or: [{ buyer_id: uid }, { seller_id: uid }],
+    });
+    if (!conv) return res.status(404).json({ error: 'Conversation not found' });
+
+    conv.txn_status = status;
+    await conv.save();
+    res.json({ success: true, txn_status: status });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// POST /api/messages/conversations/:id/rate — buyer rates seller
+router.post('/conversations/:id/rate', authMiddleware, async (req, res) => {
+  try {
+    const uid = req.user.id;
+    const { rating, review } = req.body;
+    if (!rating || rating < 1 || rating > 5)
+      return res.status(400).json({ error: 'Rating must be 1–5' });
+
+    const conv = await Conversation.findOne({ _id: req.params.id, buyer_id: uid });
+    if (!conv) return res.status(404).json({ error: 'Conversation not found or you are not the buyer' });
+    if (conv.buyer_rated) return res.status(400).json({ error: 'Already rated' });
+
+    conv.buyer_rated  = true;
+    conv.buyer_rating = rating;
+    conv.buyer_review = review || '';
+    await conv.save();
+
+    // Update seller's global rating
+    const seller = await User.findById(conv.seller_id);
+    if (seller) {
+      const newCount = (seller.rating_count || 0) + 1;
+      const newRating = ((seller.rating || 0) * (seller.rating_count || 0) + rating) / newCount;
+      seller.rating       = Math.round(newRating * 10) / 10;
+      seller.rating_count = newCount;
+      await seller.save();
+    }
+
+    res.json({ success: true });
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 

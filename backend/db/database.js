@@ -86,6 +86,10 @@ const conversationSchema = new mongoose.Schema({
   ai_flag_category:{ type: String, default: '' },
   ai_flagged_at:   { type: Date, default: null },
   ai_reviewed:     { type: Boolean, default: false },
+  txn_status:      { type: String, enum: ['pending','completed','cancelled'], default: 'pending' },
+  buyer_rated:     { type: Boolean, default: false },
+  buyer_rating:    { type: Number, default: null, min: 1, max: 5 },
+  buyer_review:    { type: String, default: '' },
 }, { timestamps: { createdAt: 'created_at', updatedAt: false } });
 
 conversationSchema.index({ buyer_id: 1 });

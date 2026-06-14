@@ -387,7 +387,6 @@ document.head.appendChild(spinStyle);
       color: var(--accent); margin-bottom: 10px;
     }
     .admin-msg-text { font-size: 14px; color: var(--ink); line-height: 1.6; margin-bottom: 4px; white-space: pre-wrap; }
-    .admin-msg-countdown { font-size: 11px; color: var(--ink-3); margin-top: 14px; text-align: right; }
   `;
   document.head.appendChild(s);
 })();
@@ -404,29 +403,17 @@ function showAdminMessageModal(content, queueRest) {
         Message from Bixcart Admin
       </div>
       <div class="admin-msg-text"></div>
-      <div class="admin-msg-countdown"></div>
     </div>`;
   overlay.querySelector('.admin-msg-text').textContent = content;
   document.body.appendChild(overlay);
 
   let dismissed = false;
-  let remaining = 3;
-  const countdownEl = overlay.querySelector('.admin-msg-countdown');
-  countdownEl.textContent = `Closing in ${remaining}s…`;
-
   function close() {
     if (dismissed) return;
     dismissed = true;
-    clearInterval(timer);
     overlay.remove();
     if (typeof queueRest === 'function') queueRest();
   }
-
-  const timer = setInterval(() => {
-    remaining -= 1;
-    if (remaining <= 0) { close(); return; }
-    countdownEl.textContent = `Closing in ${remaining}s…`;
-  }, 1000);
 
   overlay.querySelector('.admin-msg-close').addEventListener('click', close);
 }

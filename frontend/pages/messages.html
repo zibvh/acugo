@@ -386,7 +386,7 @@ document.getElementById('search-ic').innerHTML  = icons.search;
 document.getElementById('empty-ic').innerHTML   = icons.messageCircle;
 
 const me = auth.getUser();
-let allConvs = [], activeId = null, pollTimer = null, convListTimer = null;
+let allConvs = [], activeId = null, activeConv = null, pollTimer = null, convListTimer = null;
 
 /* ═══════════ CONV LIST POLL ═══════════ */
 async function refreshConvList() {
@@ -576,7 +576,8 @@ async function fetchThread(id, silent = false) {
 
     if (!data.messages.length) {
       msgsEl.innerHTML = `<div style="text-align:center;padding:40px;font-size:13px;color:var(--ink-3);line-height:1.7;">No messages yet.<br>Send one below to start the conversation.</div>`;
-      renderTxnBar(data.order, id);
+      activeConv = { ...data.conversation, txn_status: data.txn_status || 'pending', buyer_rated: data.buyer_rated || false };
+      renderTxnBar(data.txn_status || 'pending', id);
       return;
     }
 
@@ -636,7 +637,8 @@ async function fetchThread(id, silent = false) {
     }
 
     // ── Transaction bar ──────────────────────────────────────────────────────
-    renderTxnBar(data.order, id);
+    activeConv = { ...data.conversation, txn_status: data.txn_status || 'pending', buyer_rated: data.buyer_rated || false };
+    renderTxnBar(data.txn_status || 'pending', id);
 
     if (!silent) {
       const updated = allConvs.find(c => c.id === id);
@@ -648,69 +650,40 @@ async function fetchThread(id, silent = false) {
   }
 }
 
-function renderTxnBar(order, convId) {
+function renderTxnBar(txnStatus, convId) {
   const slot   = document.getElementById('txn-bar-slot');
   const bubble = document.getElementById('txn-bubble');
   if (!slot) return;
 
-  const isBuyer  = order && String(order.buyer_id)  === String(me.id);
-  const isSeller = order && String(order.seller_id) === String(me.id);
+  const bubbleIcons = { pending: '🕐', completed: '✅', cancelled: '❌' };
+  const bIcon = bubbleIcons[txnStatus] || '🕐';
 
-  // ── Update bubble visibility & colour ──────────────────────────────────────
+  // Always show bubble
   if (bubble) {
-    if (!order || (!isBuyer && !isSeller)) {
-      bubble.style.display = 'none';
-    } else {
-      bubble.style.display = 'flex';
-      bubble.className = 'txn-bubble-btn status-' + order.status;
-      const bubbleIcons = {
-        pending:   '🕐', confirmed: '🤝', completing: '⏳',
-        completed: '✅', cancelled: '❌',
-      };
-      bubble.title = 'Transaction: ' + (order.status.charAt(0).toUpperCase() + order.status.slice(1));
-      bubble.innerHTML = `<span style="font-size:15px;">${bubbleIcons[order.status] || '📦'}</span>`;
-      // Remove old listener by replacing node
-      const fresh = bubble.cloneNode(true);
-      bubble.parentNode.replaceChild(fresh, bubble);
-      fresh.addEventListener('click', () => openOutcomeModal(order, convId));
-    }
+    bubble.style.display = 'flex';
+    bubble.className = 'txn-bubble-btn status-' + (txnStatus || 'pending');
+    bubble.title = 'Transaction: ' + (txnStatus || 'pending');
+    bubble.innerHTML = `<span style="font-size:15px;">${bIcon}</span>`;
+    const fresh = bubble.cloneNode(true);
+    bubble.parentNode.replaceChild(fresh, bubble);
+    fresh.addEventListener('click', () => openOutcomeModal(txnStatus || 'pending', convId));
   }
 
-  if (!order || order.status === 'pending') {
+  // Only show bar for completed/cancelled
+  if (!txnStatus || txnStatus === 'pending') {
     slot.innerHTML = '';
     return;
   }
 
-  const isBuyerP  = String(order.buyer_id)  === String(me.id);
-  const isSellrP  = String(order.seller_id) === String(me.id);
-  if (!isBuyerP && !isSellrP) { slot.innerHTML = ''; return; }
+  const isBuyer = activeConv && String(activeConv.buyer_id) === String(me.id);
+  const sl = {
+    completed: { icon: '✅', text: 'Deal completed',  color: '#059669' },
+    cancelled: { icon: '❌', text: 'Deal cancelled',   color: '#dc2626' },
+  }[txnStatus] || { icon: '🕐', text: txnStatus, color: 'var(--ink-3)' };
 
-  const statusLabels = {
-    confirmed:  { icon: '🤝', text: 'Order confirmed',      color: '#2563eb' },
-    completing: { icon: '⏳', text: 'Completing…',           color: '#d69e2e' },
-    completed:  { icon: '✅', text: 'Transaction complete',  color: '#059669' },
-    cancelled:  { icon: '❌', text: 'Deal cancelled',        color: '#dc2626' },
-  };
-  const sl = statusLabels[order.status] || { icon: '📦', text: order.status, color: 'var(--ink-3)' };
-
-  const myMarked = isBuyerP ? order.buyer_marked_complete : order.seller_marked_complete;
-  const price = '₦' + parseFloat(order.amount || 0).toLocaleString('en-NG', { minimumFractionDigits: 0 });
-
-  let actionHTML = '';
-  if (order.status === 'completed' || order.status === 'cancelled') {
-    if (isBuyerP) {
-      actionHTML = order.buyer_rating
-        ? `<div class="txn-already-rated">${'★'.repeat(order.buyer_rating)} Rated</div>`
-        : `<button class="txn-rate-btn" id="txn-rate-btn">★ Rate Seller</button>`;
-    }
-  } else if (order.status === 'confirmed' || order.status === 'completing') {
-    actionHTML = myMarked
-      ? `<button class="txn-mark-btn waiting" disabled>⏳ Waiting for ${isBuyerP ? 'seller' : 'buyer'}</button>`
-      : `<button class="txn-mark-btn" id="txn-complete-btn">
-           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>
-           Mark Complete
-         </button>`;
-  }
+  const rateAction = isBuyer && !activeConv?.buyer_rated
+    ? `<button class="txn-rate-btn" id="txn-rate-btn">★ Rate Seller</button>`
+    : (isBuyer && activeConv?.buyer_rated ? `<div class="txn-already-rated">✓ Rated</div>` : '');
 
   slot.innerHTML = `
     <div class="txn-bar">
@@ -719,122 +692,87 @@ function renderTxnBar(order, convId) {
         <div class="txn-bar-status">
           <span>${sl.icon}</span>
           <span style="color:${sl.color}">${sl.text}</span>
-          <span style="color:var(--ink-3);font-weight:400;font-size:12px;">· ${price}</span>
         </div>
-        ${order.status === 'completing' && myMarked
-          ? `<div class="txn-bar-sub">You've marked complete — waiting for the other party</div>` : ''}
       </div>
-      <div class="txn-bar-actions">${actionHTML}</div>
+      <div class="txn-bar-actions">${rateAction}</div>
     </div>`;
 
-  const completeBtn = document.getElementById('txn-complete-btn');
-  if (completeBtn) {
-    completeBtn.addEventListener('click', async () => {
-      completeBtn.disabled = true;
-      completeBtn.innerHTML = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg> Marking…`;
-      try {
-        const result = await api.post(`/orders/${order.id}/mark-complete`, {});
-        toast('Marked complete!', 'success');
-        if (result.needs_rating) {
-          await fetchThread(convId, true);
-          openInlineRatingModal(order.id, convId);
-        } else {
-          await fetchThread(convId, true);
-        }
-      } catch(e) {
-        toast(e.message, 'error');
-        completeBtn.disabled = false;
-        completeBtn.innerHTML = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg> Mark Complete`;
-      }
-    });
-  }
-
   const rateBtn = document.getElementById('txn-rate-btn');
-  if (rateBtn) {
-    rateBtn.addEventListener('click', () => openInlineRatingModal(order.id, convId));
-  }
+  if (rateBtn) rateBtn.addEventListener('click', () => openInlineRatingModal(convId, convId));
 }
 
 /* ═══════════ OUTCOME MODAL (bubble click) ═══════════ */
-function openOutcomeModal(order, convId) {
+// convTxnStatus is the current txn_status of the conversation (passed in from fetchThread)
+function openOutcomeModal(convTxnStatus, convId) {
   const existing = document.getElementById('outcome-modal-backdrop');
   if (existing) existing.remove();
-
-  const isBuyer = String(order.buyer_id) === String(me.id);
-  const alreadyDone = order.status === 'completed' || order.status === 'cancelled';
 
   const backdrop = document.createElement('div');
   backdrop.className = 'outcome-modal-backdrop';
   backdrop.id = 'outcome-modal-backdrop';
+  document.body.appendChild(backdrop);
+  history.pushState({ modal: 'outcome' }, '');
+  const close = () => { backdrop.remove(); if (history.state?.modal === 'outcome') history.back(); };
+  backdrop.addEventListener('click', e => { if (e.target === backdrop) close(); });
 
-  const price = '₦' + parseFloat(order.amount || 0).toLocaleString('en-NG', { minimumFractionDigits: 0 });
+  const isBuyer = activeConv && String(activeConv.buyer_id) === String(me.id);
 
-  if (alreadyDone) {
-    const icons = { completed: '✅', cancelled: '❌' };
-    const colors = { completed: '#059669', cancelled: '#dc2626' };
+  // Already resolved — show status
+  if (convTxnStatus === 'completed' || convTxnStatus === 'cancelled') {
+    const statusIcon  = convTxnStatus === 'completed' ? '✅' : '❌';
+    const statusColor = convTxnStatus === 'completed' ? '#059669' : '#dc2626';
+    const rated = activeConv?.buyer_rated;
     backdrop.innerHTML = `
       <div class="outcome-modal">
         <div style="width:36px;height:4px;border-radius:2px;background:var(--border);margin:0 auto 18px;"></div>
         <div class="outcome-modal-title">Transaction Status</div>
-        <div class="outcome-modal-sub">This deal is already <strong style="color:${colors[order.status]}">${order.status}</strong>.</div>
-        <div style="text-align:center;font-size:48px;margin:16px 0;">${icons[order.status]}</div>
-        <div style="text-align:center;font-size:13px;color:var(--ink-3);margin-bottom:20px;">Amount: ${price}</div>
-        ${order.status === 'completed' && isBuyer && !order.buyer_rating
-          ? `<button id="oc-rate" class="btn btn-primary" style="width:100%;justify-content:center;">★ Rate your seller</button>` : ''}
-        <button id="oc-close" class="btn btn-ghost btn-sm" style="width:100%;justify-content:center;margin-top:10px;">Close</button>
+        <div class="outcome-modal-sub">This deal is marked <strong style="color:${statusColor}">${convTxnStatus}</strong>.</div>
+        <div style="text-align:center;font-size:48px;margin:16px 0;">${statusIcon}</div>
+        ${isBuyer && !rated
+          ? `<button id="oc-rate" class="btn btn-primary" style="width:100%;justify-content:center;margin-bottom:10px;">★ Rate your seller</button>` : ''}
+        <button id="oc-close" class="btn btn-ghost btn-sm" style="width:100%;justify-content:center;">Close</button>
       </div>`;
-    document.body.appendChild(backdrop);
-    history.pushState({ modal: 'outcome' }, '');
-    const close = () => { backdrop.remove(); if (history.state?.modal === 'outcome') history.back(); };
     backdrop.querySelector('#oc-close').addEventListener('click', close);
-    backdrop.addEventListener('click', e => { if (e.target === backdrop) close(); });
     const rateBtn = backdrop.querySelector('#oc-rate');
-    if (rateBtn) rateBtn.addEventListener('click', () => { close(); openInlineRatingModal(order.id, convId); });
+    if (rateBtn) rateBtn.addEventListener('click', () => { close(); openInlineRatingModal(convId, convId); });
     return;
   }
 
+  // Pending — show action buttons
   backdrop.innerHTML = `
     <div class="outcome-modal">
       <div style="width:36px;height:4px;border-radius:2px;background:var(--border);margin:0 auto 18px;"></div>
       <div class="outcome-modal-title">What happened?</div>
-      <div class="outcome-modal-sub">Mark what actually happened with this deal (${price}). Both parties will see the update.</div>
+      <div class="outcome-modal-sub">Mark the outcome of this conversation. Both buyer and seller can update this.</div>
       <button class="outcome-btn completed" id="oc-complete">
         <span class="outcome-btn-icon">✅</span>
         <div>
           <div class="outcome-btn-label">Deal completed</div>
-          <div class="outcome-btn-sub">We met and the transaction went through successfully</div>
+          <div class="outcome-btn-sub">We met and the transaction went through</div>
         </div>
       </button>
       <button class="outcome-btn cancelled" id="oc-cancel">
         <span class="outcome-btn-icon">❌</span>
         <div>
           <div class="outcome-btn-label">Deal cancelled</div>
-          <div class="outcome-btn-sub">The transaction didn't happen — listing will go back to active</div>
+          <div class="outcome-btn-sub">The transaction didn't happen</div>
         </div>
       </button>
       <button id="oc-dismiss" style="width:100%;padding:11px;border:none;background:none;cursor:pointer;font-size:13px;color:var(--ink-3);font-family:var(--font-body);margin-top:4px;">Not yet — still talking</button>
     </div>`;
 
-  document.body.appendChild(backdrop);
-  history.pushState({ modal: 'outcome' }, '');
-
-  const close = () => { backdrop.remove(); if (history.state?.modal === 'outcome') history.back(); };
   backdrop.querySelector('#oc-dismiss').addEventListener('click', close);
-  backdrop.addEventListener('click', e => { if (e.target === backdrop) close(); });
 
   async function resolve(outcome) {
     const btn = backdrop.querySelector(outcome === 'completed' ? '#oc-complete' : '#oc-cancel');
     btn.style.opacity = '.6'; btn.style.pointerEvents = 'none';
     try {
-      const result = await api.post(`/orders/${order.id}/resolve`, { outcome });
+      await api.post(`/messages/conversations/${convId}/txn-status`, { status: outcome });
       close();
-      toast(outcome === 'completed' ? 'Deal marked complete! 🎉' : 'Deal marked cancelled.', outcome === 'completed' ? 'success' : 'info');
-      if (result.needs_rating) {
-        await fetchThread(convId, true);
-        openInlineRatingModal(order.id, convId);
-      } else {
-        await fetchThread(convId, true);
-      }
+      toast(outcome === 'completed' ? 'Deal marked complete! 🎉' : 'Deal cancelled.', outcome === 'completed' ? 'success' : 'info');
+      await fetchThread(convId, true);
+      // Always ask buyer to rate after any outcome
+      if (isBuyer) openInlineRatingModal(convId, convId);
     } catch(e) {
       toast(e.message, 'error');
       btn.style.opacity = ''; btn.style.pointerEvents = '';
@@ -977,7 +915,7 @@ function openInlineRatingModal(orderId, convId) {
     if (!selectedStars) return;
     submit.disabled = true; submit.textContent = 'Submitting…';
     try {
-      await api.post(`/orders/${orderId}/rate`, {
+      await api.post(`/messages/conversations/${orderId}/rate`, {
         rating: selectedStars,
         review: root.querySelector('#rating-review').value.trim(),
       });

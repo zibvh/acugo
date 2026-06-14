@@ -224,9 +224,9 @@
             <span id="nav-icon-messages"></span> Messages
           </button>
           <div class="dash-nav-divider"></div>
-          <button class="dash-nav-item" data-tab="settings">
+          <a class="dash-nav-item" href="settings.html" style="text-decoration:none;">
             <span id="nav-icon-settings"></span> Account Settings
-          </button>
+          </a>
         </div>
       </aside>
 
@@ -273,42 +273,6 @@
           <div id="convs-list" style="display:flex;flex-direction:column;gap:10px;"></div>
         </div>
 
-        <!-- Settings Tab -->
-        <div id="tab-settings" class="tab-content" style="display:none;">
-          <div style="margin-bottom:24px;">
-            <h2 style="font-size:22px;font-weight:700;margin-bottom:2px;">Account Settings</h2>
-            <p class="text-sm text-muted">Manage your profile information</p>
-          </div>
-          <div class="card" style="padding:28px;max-width:560px;">
-            <div class="form-group" style="margin-bottom:16px;">
-              <label class="form-label">Full name</label>
-              <input class="form-input" id="s-name" type="text">
-            </div>
-            <div class="form-group" style="margin-bottom:16px;">
-              <label class="form-label">Email address</label>
-              <input class="form-input" id="s-email" type="email" disabled style="opacity:.6;">
-              <span class="form-hint">Email cannot be changed</span>
-            </div>
-            <div class="form-group" style="margin-bottom:16px;">
-              <label class="form-label">University</label>
-              <select class="form-select" id="s-university">
-                <option value="UC Berkeley">UC Berkeley</option>
-                <option value="Stanford University">Stanford University</option>
-                <option value="UCLA">UCLA</option>
-                <option value="NYU">New York University</option>
-                <option value="MIT">MIT</option>
-                <option value="Harvard University">Harvard University</option>
-                <option value="Other">Other</option>
-              </select>
-            </div>
-            <div class="form-group" style="margin-bottom:24px;">
-              <label class="form-label">Bio</label>
-              <textarea class="form-textarea" id="s-bio" placeholder="Tell other students about yourself…"></textarea>
-            </div>
-            <button class="btn btn-primary" id="save-profile-btn">Save changes</button>
-          </div>
-        </div>
-
       </main>
     </div>
   </div>
@@ -344,7 +308,6 @@
       document.getElementById(`tab-${currentTab}`).style.display = 'block';
       if (currentTab === 'saved') loadSaved();
       if (currentTab === 'messages') loadConversations();
-      if (currentTab === 'settings') loadSettings();
     });
   });
 
@@ -590,31 +553,6 @@
       if (convs.length > 5) el.innerHTML += `<a href="messages.html" class="btn btn-ghost w-full" style="display:flex;justify-content:center;">View all ${convs.length} conversations</a>`;
     } catch(e) { el.innerHTML = `<p class="text-muted">${e.message}</p>`; }
   }
-
-  async function loadSettings() {
-    try {
-      const user = await api.get('/auth/me');
-      document.getElementById('s-name').value = user.full_name;
-      document.getElementById('s-email').value = user.email;
-      document.getElementById('s-university').value = user.university;
-      document.getElementById('s-bio').value = user.bio || '';
-    } catch(e) {}
-  }
-
-  document.getElementById('save-profile-btn').addEventListener('click', async () => {
-    const btn = document.getElementById('save-profile-btn');
-    btn.disabled = true; btn.innerHTML = icons.loader + ' Saving…';
-    try {
-      await api.put('/auth/profile', {
-        full_name: document.getElementById('s-name').value,
-        university: document.getElementById('s-university').value,
-        bio: document.getElementById('s-bio').value,
-      });
-      toast('Profile updated!', 'success');
-      loadProfile();
-    } catch(e) { toast(e.message, 'error'); }
-    btn.disabled = false; btn.innerHTML = icons.check + ' Save changes';
-  });
 
   document.getElementById('logout-btn').addEventListener('click', () => {
     auth.clear();

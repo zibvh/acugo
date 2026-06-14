@@ -170,6 +170,7 @@ function renderNav(activePage = '') {
         <a href="${dashHref}" class="nav-user-menu-item">${icons.user} Dashboard</a>
         <a href="/pages/messages.html" class="nav-user-menu-item">${icons.messageCircle} Messages</a>
         <a href="/pages/wishlist.html" class="nav-user-menu-item"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/></svg> Wishlist</a>
+        <a href="/pages/settings.html" class="nav-user-menu-item">${icons.settings} Settings</a>
         <div class="nav-user-menu-sep"></div>
         <button class="nav-user-menu-item nav-user-menu-logout" onclick="logout()">${icons.logout} Log out</button>
       </div>
@@ -268,6 +269,7 @@ function renderFooter() {
         <li><a href="/pages/buyer-dashboard.html">My purchases</a></li>
         <li><a href="/pages/seller-dashboard.html">Seller dashboard</a></li>
         <li><a href="/pages/messages.html">Messages</a></li>
+        <li><a href="/pages/settings.html">Account settings</a></li>
         <li><a href="/pages/auth.html">Sign in</a></li>
       </ul></div>
       <div class="footer-col"><h5>Company</h5><ul>
@@ -359,9 +361,90 @@ document.head.appendChild(spinStyle);
     .nav-user-menu-item:hover { background: var(--bg); }
     .nav-user-menu-sep { height: 1px; background: var(--border); margin: 4px 0; }
     .nav-user-menu-logout { color: #e53e3e; }
+
+    /* Admin message modal */
+    .admin-msg-overlay {
+      position: fixed; inset: 0; background: rgba(0,0,0,.55);
+      display: flex; align-items: center; justify-content: center;
+      z-index: 10000; padding: 20px;
+    }
+    .admin-msg-modal {
+      position: relative; background: var(--surface); border-radius: 16px;
+      padding: 28px 24px; max-width: 420px; width: 100%;
+      box-shadow: 0 20px 60px rgba(0,0,0,.25);
+    }
+    .admin-msg-close {
+      position: absolute; top: 10px; right: 10px;
+      width: 28px; height: 28px; border-radius: 50%;
+      background: var(--surface-2); border: none; cursor: pointer;
+      display: flex; align-items: center; justify-content: center;
+      color: var(--ink-2); transition: background .12s;
+    }
+    .admin-msg-close:hover { background: var(--border); }
+    .admin-msg-label {
+      display: flex; align-items: center; gap: 7px;
+      font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: .06em;
+      color: var(--accent); margin-bottom: 10px;
+    }
+    .admin-msg-text { font-size: 14px; color: var(--ink); line-height: 1.6; margin-bottom: 4px; white-space: pre-wrap; }
+    .admin-msg-countdown { font-size: 11px; color: var(--ink-3); margin-top: 14px; text-align: right; }
   `;
   document.head.appendChild(s);
 })();
+
+// ── ADMIN MESSAGE MODAL ──
+function showAdminMessageModal(content, queueRest) {
+  const overlay = document.createElement('div');
+  overlay.className = 'admin-msg-overlay';
+  overlay.innerHTML = `
+    <div class="admin-msg-modal">
+      <button class="admin-msg-close" title="Dismiss">${icons.x}</button>
+      <div class="admin-msg-label">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+        Message from Bixcart Admin
+      </div>
+      <div class="admin-msg-text"></div>
+      <div class="admin-msg-countdown"></div>
+    </div>`;
+  overlay.querySelector('.admin-msg-text').textContent = content;
+  document.body.appendChild(overlay);
+
+  let dismissed = false;
+  let remaining = 3;
+  const countdownEl = overlay.querySelector('.admin-msg-countdown');
+  countdownEl.textContent = `Closing in ${remaining}s…`;
+
+  function close() {
+    if (dismissed) return;
+    dismissed = true;
+    clearInterval(timer);
+    overlay.remove();
+    if (typeof queueRest === 'function') queueRest();
+  }
+
+  const timer = setInterval(() => {
+    remaining -= 1;
+    if (remaining <= 0) { close(); return; }
+    countdownEl.textContent = `Closing in ${remaining}s…`;
+  }, 1000);
+
+  overlay.querySelector('.admin-msg-close').addEventListener('click', close);
+}
+
+async function checkAdminMessages() {
+  if (!auth.isLoggedIn()) return;
+  try {
+    const { messages } = await api.get('/auth/admin-messages');
+    if (!messages || !messages.length) return;
+    let i = 0;
+    function showNext() {
+      if (i >= messages.length) return;
+      const m = messages[i++];
+      showAdminMessageModal(m.content, showNext);
+    }
+    showNext();
+  } catch {}
+}
 
 // ── BACKGROUND UNREAD POLL (updates nav badge while on any page) ──
 let _unreadPollTimer = null;
@@ -382,6 +465,8 @@ function startUnreadPoll() {
 document.addEventListener('DOMContentLoaded', () => {
   // Push SW init — register service worker on every page
   if (auth.isLoggedIn()) pushManager.init();
+  // Show any unread admin messages as a modal
+  checkAdminMessages();
 });
 
 // ── SERVICE WORKER + PUSH NOTIFICATIONS ──

@@ -14,6 +14,7 @@ const userSchema = new mongoose.Schema({
   banner_url:      { type: String, default: null },
   bio:             { type: String, default: '' },
   university:      { type: String, default: 'Ajayi Crowther University' },
+  location:        { type: String, default: '' },
   rating:          { type: Number, default: 0 },
   rating_count:    { type: Number, default: 0 },
   is_verified:     { type: Boolean, default: false },

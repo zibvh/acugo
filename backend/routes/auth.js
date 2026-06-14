@@ -308,10 +308,11 @@ router.put('/complete-registration', authMiddleware, async (req, res) => {
 // ─── PUT /api/auth/profile ────────────────────────────────────────────────────
 router.put('/profile', authMiddleware, async (req, res) => {
   try {
-    const { full_name, bio, business_name, university, avatar_url, banner_url } = req.body;
+    const { full_name, bio, business_name, university, location, avatar_url, banner_url } = req.body;
     const update = { full_name, bio };
     if (business_name !== undefined) update.business_name = business_name;
     if (university   !== undefined) update.university     = university;
+    if (location     !== undefined) update.location       = location;
     if (avatar_url   !== undefined) update.avatar_url     = avatar_url;
     if (banner_url   !== undefined) update.banner_url     = banner_url;
     const user = await User.findByIdAndUpdate(
@@ -319,6 +320,50 @@ router.put('/profile', authMiddleware, async (req, res) => {
     ).select('-password_hash -email_verify_token -password_reset_token');
     const obj = user.toObject(); obj.id = obj._id;
     res.json(obj);
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// ─── PUT /api/auth/change-password ───────────────────────────────────────────
+router.put('/change-password', authMiddleware, async (req, res) => {
+  try {
+    const { current_password, new_password, confirm_password } = req.body;
+    if (!current_password || !new_password || !confirm_password)
+      return res.status(400).json({ error: 'All fields are required' });
+
+    if (new_password !== confirm_password)
+      return res.status(400).json({ error: 'New passwords do not match' });
+
+    const pwErr = validatePassword(new_password);
+    if (pwErr) return res.status(400).json({ error: pwErr });
+
+    const user = await User.findById(req.user.id);
+    if (!user) return res.status(404).json({ error: 'User not found' });
+
+    if (!bcrypt.compareSync(current_password, user.password_hash))
+      return res.status(401).json({ error: 'Current password is incorrect' });
+
+    user.password_hash = bcrypt.hashSync(new_password, 12);
+    await user.save();
+
+    res.json({ success: true });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// ─── GET /api/auth/admin-messages ────────────────────────────────────────────
+// Returns unread admin messages and marks them as read.
+router.get('/admin-messages', authMiddleware, async (req, res) => {
+  try {
+    const user = await User.findById(req.user.id).select('admin_messages');
+    if (!user) return res.status(404).json({ error: 'User not found' });
+
+    const unread = (user.admin_messages || []).filter(m => !m.read);
+
+    if (unread.length) {
+      user.admin_messages.forEach(m => { m.read = true; });
+      await user.save();
+    }
+
+    res.json({ messages: unread.map(m => ({ content: m.content, sent_at: m.sent_at })) });
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 

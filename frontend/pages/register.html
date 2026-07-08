@@ -89,9 +89,13 @@
     min-height: 140px; display: flex; flex-direction: column; align-items: center; justify-content: center;
   }
   .upload-box:hover { border-color: var(--ink-3); background: var(--surface); }
-  .upload-box.has-img { border-style: solid; border-color: var(--accent); padding: 0; }
+  .upload-box:hover .upload-change { opacity: 1; }
+  .upload-box.has-img { border-style: solid; border-color: var(--accent); }
+  .upload-box.has-img .upload-preview { display: block !important; }
+  .upload-box.has-img .upload-content { display: none !important; }
   .upload-box input[type=file] { position: absolute; inset: 0; opacity: 0; cursor: pointer; }
-  .upload-box img { width: 100%; height: 140px; object-fit: cover; border-radius: calc(var(--radius-lg) - 2px); display: block; }
+  .upload-preview { position: relative; }
+  .upload-content { display: flex; flex-direction: column; align-items: center; justify-content: center; }
   .upload-icon { color: var(--ink-3); margin-bottom: 8px; display: flex; justify-content: center; }
   .upload-label { font-size: 13px; font-weight: 600; color: var(--ink-2); margin-bottom: 3px; }
   .upload-sub { font-size: 11px; color: var(--ink-3); }
@@ -100,7 +104,6 @@
     background: rgba(24,21,15,.7); color: white; font-size: 12px; padding: 6px;
     opacity: 0; transition: opacity .2s;
   }
-  .upload-box.has-img:hover .upload-change { opacity: 1; }
 
   .info-box {
     background: var(--bg); border: 1.5px solid var(--border);
@@ -250,21 +253,31 @@
       <div>
         <div style="font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--ink-3);margin-bottom:8px;">Front</div>
         <div class="upload-box" id="front-box" onclick="document.getElementById('front-input').click()">
-          <input type="file" id="front-input" accept="image/*" onchange="handleUpload('front', this)">
-          <div class="upload-icon" id="front-icon"></div>
-          <div class="upload-label">Tap to upload</div>
-          <div class="upload-sub">Clear, in good light</div>
-          <div class="upload-change">Change photo</div>
+          <input type="file" id="front-input" accept="image/*" onchange="handleUpload('front', this)" style="position:absolute;inset:0;opacity:0;cursor:pointer;width:100%;height:100%;">
+          <div class="upload-preview" id="front-preview" style="display:none;width:100%;height:140px;">
+            <img id="front-preview-img" src="" alt="ID front" style="width:100%;height:100%;object-fit:cover;border-radius:calc(var(--radius-lg) - 2px);display:block;">
+            <div class="upload-change">Change photo</div>
+          </div>
+          <div id="front-content" class="upload-content">
+            <div class="upload-icon" id="front-icon"></div>
+            <div class="upload-label">Tap to upload</div>
+            <div class="upload-sub">Clear, in good light</div>
+          </div>
         </div>
       </div>
       <div>
         <div style="font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--ink-3);margin-bottom:8px;">Back</div>
         <div class="upload-box" id="back-box" onclick="document.getElementById('back-input').click()">
-          <input type="file" id="back-input" accept="image/*" onchange="handleUpload('back', this)">
-          <div class="upload-icon" id="back-icon"></div>
-          <div class="upload-label">Tap to upload</div>
-          <div class="upload-sub">Clear, in good light</div>
-          <div class="upload-change">Change photo</div>
+          <input type="file" id="back-input" accept="image/*" onchange="handleUpload('back', this)" style="position:absolute;inset:0;opacity:0;cursor:pointer;width:100%;height:100%;">
+          <div class="upload-preview" id="back-preview" style="display:none;width:100%;height:140px;">
+            <img id="back-preview-img" src="" alt="ID back" style="width:100%;height:100%;object-fit:cover;border-radius:calc(var(--radius-lg) - 2px);display:block;">
+            <div class="upload-change">Change photo</div>
+          </div>
+          <div id="back-content" class="upload-content">
+            <div class="upload-icon" id="back-icon"></div>
+            <div class="upload-label">Tap to upload</div>
+            <div class="upload-sub">Clear, in good light</div>
+          </div>
         </div>
       </div>
     </div>
@@ -404,15 +417,47 @@
   async function handleUpload(side, input) {
     const file = input.files[0];
     if (!file) return;
+    
     const box = document.getElementById(side + '-box');
+    const previewImg = document.getElementById(side + '-preview-img');
+    const previewEl = document.getElementById(side + '-preview');
+    const contentEl = document.getElementById(side + '-content');
     const iconEl = document.getElementById(side + '-icon');
 
-    // Show loading state
-    iconEl.innerHTML = icons.loader;
-    box.style.opacity = '0.7';
+    // Validate file immediately
+    if (!file.type.startsWith('image/')) {
+      toast('Please select an image file', 'error');
+      input.value = '';
+      return;
+    }
 
+    if (file.size > 8 * 1024 * 1024) {
+      toast('Image must be less than 8MB', 'error');
+      input.value = '';
+      return;
+    }
+
+    // Show loading state FIRST
+    if (iconEl) iconEl.innerHTML = icons.loader;
+    if (contentEl) contentEl.style.opacity = '0.5';
+
+    // On iOS, read the file immediately to ensure it's valid
+    let fileBlob = file;
+    try {
+      const arrayBuffer = await file.arrayBuffer();
+      fileBlob = new Blob([arrayBuffer], { type: file.type });
+    } catch (err) {
+      toast('Cannot read file. Try again.', 'error');
+      if (iconEl) iconEl.innerHTML = icons.image;
+      if (contentEl) contentEl.style.opacity = '1';
+      input.value = '';
+      return;
+    }
+
+    // Now upload
     const formData = new FormData();
-    formData.append('image', file);
+    formData.append('image', fileBlob, file.name);
+    
     try {
       const token = localStorage.getItem('cm_token');
       const res = await fetch('/api/uploads/image', {
@@ -420,23 +465,37 @@
         headers: { 'Authorization': `Bearer ${token}` },
         body: formData,
       });
+      
       const data = await res.json();
-      if (!res.ok) { toast(data.error || 'Upload failed', 'error'); iconEl.innerHTML = icons.image; box.style.opacity='1'; return; }
+      
+      if (!res.ok) { 
+        toast(data.error || 'Upload failed', 'error'); 
+        if (iconEl) iconEl.innerHTML = icons.image; 
+        if (contentEl) contentEl.style.opacity = '1'; 
+        input.value = '';
+        return; 
+      }
 
+      // Store URL
       if (side === 'front') frontUrl = data.url;
       else backUrl = data.url;
 
-      // Show preview
+      // Update preview
+      previewImg.src = data.url;
+      previewEl.style.display = 'block';
+      contentEl.style.display = 'none';
       box.classList.add('has-img');
-      box.innerHTML = `<input type="file" id="${side}-input" accept="image/*" onchange="handleUpload('${side}', this)" style="position:absolute;inset:0;opacity:0;cursor:pointer;">
-        <img src="${data.url}" alt="ID ${side}">
-        <div class="upload-change">Change photo</div>`;
-      box.style.opacity = '1';
+      
+      // Reset input value to allow re-selection
+      input.value = '';
+      
       toast(`${side === 'front' ? 'Front' : 'Back'} uploaded`, 'success');
     } catch(err) {
-      toast('Upload failed: ' + err.message, 'error');
-      iconEl.innerHTML = icons.image;
-      box.style.opacity = '1';
+      console.error('Upload error:', err);
+      toast('Upload failed: ' + (err.message || 'Network error'), 'error');
+      if (iconEl) iconEl.innerHTML = icons.image;
+      if (contentEl) contentEl.style.opacity = '1';
+      input.value = '';
     }
   }
 

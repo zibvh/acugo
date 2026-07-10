@@ -211,6 +211,37 @@ router.put('/:id', authMiddleware, async (req, res) => {
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
+// POST /api/listings/:id/mark-sold — seller marks their listing as sold.
+// This is a lifecycle action, not a content edit, so it's not subject to the
+// 90-minute edit lock. A sold listing immediately leaves the active
+// marketplace (GET / only returns status:'active' listings).
+router.post('/:id/mark-sold', authMiddleware, async (req, res) => {
+  try {
+    const listing = await Listing.findById(req.params.id);
+    if (!listing) return res.status(404).json({ error: 'Not found' });
+    if (String(listing.seller_id) !== String(req.user.id)) return res.status(403).json({ error: 'Forbidden' });
+    if (listing.ai_flagged) return res.status(403).json({ error: 'This listing has been flagged by our AI and cannot be changed until an admin reviews it.' });
+    if (listing.status === 'deleted') return res.status(400).json({ error: 'This listing has been deleted' });
+
+    const updated = await Listing.findByIdAndUpdate(req.params.id, { $set: { status: 'sold' } }, { new: true }).lean();
+    res.json({ ...updated, id: updated._id });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// POST /api/listings/:id/relist — seller undoes a "mark as sold", putting the
+// listing back on the active marketplace.
+router.post('/:id/relist', authMiddleware, async (req, res) => {
+  try {
+    const listing = await Listing.findById(req.params.id);
+    if (!listing) return res.status(404).json({ error: 'Not found' });
+    if (String(listing.seller_id) !== String(req.user.id)) return res.status(403).json({ error: 'Forbidden' });
+    if (listing.status !== 'sold') return res.status(400).json({ error: 'Only sold listings can be relisted' });
+
+    const updated = await Listing.findByIdAndUpdate(req.params.id, { $set: { status: 'active' } }, { new: true }).lean();
+    res.json({ ...updated, id: updated._id });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
 // DELETE /api/listings/:id
 router.delete('/:id', authMiddleware, async (req, res) => {
   try {

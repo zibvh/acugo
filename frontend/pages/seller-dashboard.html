@@ -568,12 +568,39 @@
         <div class="listing-actions">
           <a href="listing.html?id=${l._id || l.id}" class="btn btn-ghost btn-sm btn-icon" title="View">${icons.eye}</a>
           ${(() => { const locked = (Date.now() - new Date(l.created_at).getTime()) > 90*60*1000; return `<a href="sell.html?edit=${l._id || l.id}" class="btn btn-ghost btn-sm btn-icon" title="${locked ? 'Editing locked after 90 minutes' : 'Edit'}" style="${locked ? 'pointer-events:none;opacity:.3;' : ''}">${locked ? icons.lock : icons.edit}</a>`; })()}
+          ${l.status === 'active' && !l.ai_flagged
+            ? `<button class="btn btn-ghost btn-sm" title="Mark as sold — removes it from the marketplace" onclick="markListingSold('${l._id || l.id}',this)" style="display:flex;align-items:center;gap:5px;">${icons.check} Mark sold</button>`
+            : ''}
+          ${l.status === 'sold'
+            ? `<button class="btn btn-ghost btn-sm" title="Put this back on the marketplace" onclick="relistListing('${l._id || l.id}',this)">Relist</button>`
+            : ''}
           ${l.ai_flagged
             ? `<button class="btn btn-ghost btn-sm btn-icon" title="Flagged — cannot delete until admin reviews" disabled style="opacity:.4;cursor:not-allowed;">${icons.trash}</button>`
             : `<button class="btn btn-ghost btn-sm btn-icon" title="Delete" onclick="deleteListing('${l._id || l.id}',this)">${icons.trash}</button>`}
         </div>
       </div>`).join('');
   }
+
+  async function markListingSold(id, btn) {
+    if (!confirm('Mark this listing as sold? It will be removed from the marketplace immediately.')) return;
+    if (btn) btn.disabled = true;
+    try {
+      await api.post(`/listings/${id}/mark-sold`, {});
+      toast('Listing marked as sold', 'success');
+      loadDashboard();
+    } catch (e) { toast(e.message, 'error'); if (btn) btn.disabled = false; }
+  }
+  window.markListingSold = markListingSold;
+
+  async function relistListing(id, btn) {
+    if (btn) btn.disabled = true;
+    try {
+      await api.post(`/listings/${id}/relist`, {});
+      toast('Listing is active again', 'success');
+      loadDashboard();
+    } catch (e) { toast(e.message, 'error'); if (btn) btn.disabled = false; }
+  }
+  window.relistListing = relistListing;
 
   async function deleteListing(id, btn) {
     if (!confirm('Delete this listing?')) return;

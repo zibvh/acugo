@@ -116,16 +116,20 @@ router.post('/send', authMiddleware, async (req, res) => {
     } else {
       if (!receiver_id) return res.status(400).json({ error: 'receiver_id required' });
 
-      // Find existing conversation for this listing + pair
+      // Find an existing *active* conversation for this listing + pair.
+      // A conversation whose transaction already finished (completed or
+      // cancelled) is left alone as a record of that past deal — messaging
+      // the seller again starts a brand new conversation/transaction,
+      // rather than reopening the old one.
       const orPairs = [
         { buyer_id: uid, seller_id: receiver_id },
         { buyer_id: receiver_id, seller_id: uid },
       ];
       const qry = listing_id
-        ? { listing_id, $or: orPairs }
-        : { $or: orPairs };
+        ? { listing_id, $or: orPairs, txn_status: 'pending' }
+        : { $or: orPairs, txn_status: 'pending' };
 
-      convDoc = await Conversation.findOne(qry);
+      convDoc = await Conversation.findOne(qry).sort({ last_message_at: -1 });
 
       if (!convDoc) {
         const listing = listing_id ? await Listing.findById(listing_id) : null;

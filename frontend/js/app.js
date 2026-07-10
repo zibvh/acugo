@@ -373,49 +373,58 @@ document.head.appendChild(spinStyle);
       padding: 28px 24px; max-width: 420px; width: 100%;
       box-shadow: 0 20px 60px rgba(0,0,0,.25);
     }
-    .admin-msg-close {
-      position: absolute; top: 10px; right: 10px;
-      width: 28px; height: 28px; border-radius: 50%;
-      background: var(--surface-2); border: none; cursor: pointer;
-      display: flex; align-items: center; justify-content: center;
-      color: var(--ink-2); transition: background .12s;
-    }
-    .admin-msg-close:hover { background: var(--border); }
     .admin-msg-label {
       display: flex; align-items: center; gap: 7px;
       font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: .06em;
       color: var(--accent); margin-bottom: 10px;
     }
-    .admin-msg-text { font-size: 14px; color: var(--ink); line-height: 1.6; margin-bottom: 4px; white-space: pre-wrap; }
+    .admin-msg-title { font-size: 16px; font-weight: 700; color: var(--ink); margin-bottom: 8px; }
+    .admin-msg-text { font-size: 14px; color: var(--ink); line-height: 1.6; margin-bottom: 20px; white-space: pre-wrap; }
+    .admin-msg-ack-btn {
+      width: 100%; display: flex; align-items: center; justify-content: center; gap: 7px;
+      background: var(--accent); color: #fff; border: none; border-radius: var(--radius-md, 10px);
+      padding: 12px 16px; font-size: 14px; font-weight: 700; font-family: var(--font-body);
+      cursor: pointer; transition: opacity .12s;
+    }
+    .admin-msg-ack-btn:hover { opacity: .9; }
+    .admin-msg-ack-btn:disabled { opacity: .6; cursor: default; }
   `;
   document.head.appendChild(s);
 })();
 
 // ── ADMIN MESSAGE MODAL ──
-function showAdminMessageModal(content, queueRest) {
+// Requires an explicit button press to close — there's no X or backdrop-click
+// dismissal, since the message must be actively acknowledged (not just seen).
+function showAdminMessageModal(msg, queueRest) {
   const overlay = document.createElement('div');
   overlay.className = 'admin-msg-overlay';
   overlay.innerHTML = `
     <div class="admin-msg-modal">
-      <button class="admin-msg-close" title="Dismiss">${icons.x}</button>
       <div class="admin-msg-label">
         <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
         Message from Bixcart Admin
       </div>
+      ${msg.title ? `<div class="admin-msg-title"></div>` : ''}
       <div class="admin-msg-text"></div>
+      <button class="admin-msg-ack-btn">${icons.check} I've read this</button>
     </div>`;
-  overlay.querySelector('.admin-msg-text').textContent = content;
+  if (msg.title) overlay.querySelector('.admin-msg-title').textContent = msg.title;
+  overlay.querySelector('.admin-msg-text').textContent = msg.content;
   document.body.appendChild(overlay);
 
-  let dismissed = false;
-  function close() {
-    if (dismissed) return;
-    dismissed = true;
+  const btn = overlay.querySelector('.admin-msg-ack-btn');
+  let acking = false;
+  btn.addEventListener('click', async () => {
+    if (acking) return;
+    acking = true;
+    btn.disabled = true;
+    btn.textContent = 'Marking as read…';
+    try {
+      if (msg.id) await api.post(`/auth/admin-messages/${msg.id}/ack`, {});
+    } catch {}
     overlay.remove();
     if (typeof queueRest === 'function') queueRest();
-  }
-
-  overlay.querySelector('.admin-msg-close').addEventListener('click', close);
+  });
 }
 
 async function checkAdminMessages() {
@@ -427,7 +436,7 @@ async function checkAdminMessages() {
     function showNext() {
       if (i >= messages.length) return;
       const m = messages[i++];
-      showAdminMessageModal(m.content, showNext);
+      showAdminMessageModal(m, showNext);
     }
     showNext();
   } catch {}

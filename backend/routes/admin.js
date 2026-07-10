@@ -1,6 +1,6 @@
 const express = require('express');
 const router  = express.Router();
-const { User, Listing, Conversation, Message, Order, ConversationReport } = require('../db/database');
+const { User, Listing, Conversation, Message, Order, ConversationReport, Broadcast } = require('../db/database');
 const { adminMiddleware } = require('../middleware/auth');
 const { notifyUser } = require('../db/push');
 
@@ -144,7 +144,7 @@ router.post('/users/:id/unsuspend', async (req, res) => {
 // POST /api/admin/users/:id/message — send a system message/notification to a user
 router.post('/users/:id/message', async (req, res) => {
   try {
-    const { message } = req.body;
+    const { message, title } = req.body;
     if (!message?.trim()) return res.status(400).json({ error: 'Message is required' });
     const user = await User.findById(req.params.id).lean();
     if (!user) return res.status(404).json({ error: 'User not found' });
@@ -155,13 +155,15 @@ router.post('/users/:id/message', async (req, res) => {
       type:  'admin_message',
     }).catch(() => {});
 
-    // Store message on user record for in-app inbox
+    // Store message on user record for in-app inbox / popup modal
     await User.findByIdAndUpdate(req.params.id, {
       $push: {
         admin_messages: {
+          title:   (title || '').trim(),
           content: message.trim(),
           sent_at: new Date(),
           read: false,
+          acknowledged: false,
         },
       },
     });
@@ -187,6 +189,147 @@ router.delete('/users/:id', async (req, res) => {
     await User.findByIdAndDelete(user._id);
 
     res.json({ success: true });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// ── BROADCAST MESSAGES ─────────────────────────────────────────────────────────
+// Shared helper: build a Mongo filter for the recipient-selection filters
+// used by both the recipient list and the "select all matching" send path.
+function buildRecipientFilter(query) {
+  const { q, role, status, verified, university } = query;
+  const filter = { role: { $ne: 'admin' } };
+  if (role && role !== 'all') filter.role = role;
+  if (status && status !== 'all') filter.account_status = status;
+  if (verified === 'yes') filter.is_verified = true;
+  if (verified === 'no')  filter.is_verified = false;
+  if (university && university !== 'all') filter.university = university;
+  if (q) {
+    const re = new RegExp(q.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i');
+    filter.$or = [{ full_name: re }, { email: re }];
+  }
+  return filter;
+}
+
+// GET /api/admin/broadcast/universities — distinct universities, for the filter dropdown
+router.get('/broadcast/universities', async (req, res) => {
+  try {
+    const list = await User.distinct('university', { role: { $ne: 'admin' } });
+    res.json({ universities: list.filter(Boolean).sort() });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// GET /api/admin/broadcast/recipients?q=&role=&status=&verified=&university=&page=&limit=
+// Paginated list of users matching the filters, for the checkbox picker.
+router.get('/broadcast/recipients', async (req, res) => {
+  try {
+    const { page = 1, limit = 20 } = req.query;
+    const filter = buildRecipientFilter(req.query);
+    const skip  = (parseInt(page) - 1) * parseInt(limit);
+    const total = await User.countDocuments(filter);
+    const users = await User.find(filter)
+      .select('full_name email role account_status is_verified university avatar_url')
+      .sort({ created_at: -1 })
+      .skip(skip).limit(parseInt(limit)).lean();
+
+    res.json({
+      users: users.map(u => ({ ...u, id: u._id })),
+      total,
+      page: parseInt(page),
+      pages: Math.ceil(total / parseInt(limit)),
+    });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// GET /api/admin/broadcast/recipients/ids?...filters — all user ids matching the
+// filters (no pagination). Used for "select all N users matching these filters".
+router.get('/broadcast/recipients/ids', async (req, res) => {
+  try {
+    const filter = buildRecipientFilter(req.query);
+    const ids = await User.find(filter).select('_id').lean();
+    res.json({ ids: ids.map(u => String(u._id)), count: ids.length });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// POST /api/admin/broadcast — send a message to a selected set of users.
+// Body: { user_ids: [...], title, message, filters (optional, for audit history) }
+router.post('/broadcast', async (req, res) => {
+  try {
+    const { user_ids, title, message, filters } = req.body;
+    if (!message?.trim()) return res.status(400).json({ error: 'Message is required' });
+    if (!Array.isArray(user_ids) || !user_ids.length) {
+      return res.status(400).json({ error: 'At least one recipient is required' });
+    }
+    // Safety cap so a bad payload can't fan out unbounded writes/pushes
+    if (user_ids.length > 20000) {
+      return res.status(400).json({ error: 'Too many recipients in a single broadcast' });
+    }
+
+    // Only message real, existing, non-admin users
+    const validUsers = await User.find({ _id: { $in: user_ids }, role: { $ne: 'admin' } }).select('_id').lean();
+    const validIds = validUsers.map(u => u._id);
+    if (!validIds.length) return res.status(400).json({ error: 'No valid recipients found' });
+
+    const broadcast = await Broadcast.create({
+      title:           (title || '').trim(),
+      content:         message.trim(),
+      filters:         filters || {},
+      recipient_ids:   validIds,
+      recipient_count: validIds.length,
+      sent_by:         req.user.id,
+    });
+
+    await User.updateMany(
+      { _id: { $in: validIds } },
+      { $push: { admin_messages: {
+          title:   (title || '').trim(),
+          content: message.trim(),
+          sent_at: new Date(),
+          read: false,
+          acknowledged: false,
+          broadcast_id: broadcast._id,
+        } } }
+    );
+
+    // Best-effort push notifications, fire-and-forget
+    validIds.forEach(id => {
+      notifyUser(String(id), {
+        title: title?.trim() ? `📣 ${title.trim()}` : '📣 Message from Bixcart Admin',
+        body:  message.trim(),
+        type:  'admin_broadcast',
+      }).catch(() => {});
+    });
+
+    res.json({ success: true, recipient_count: validIds.length, broadcast_id: broadcast._id });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// GET /api/admin/broadcasts — history of past broadcasts with acknowledgment counts
+router.get('/broadcasts', async (req, res) => {
+  try {
+    const { page = 1, limit = 20 } = req.query;
+    const skip  = (parseInt(page) - 1) * parseInt(limit);
+    const total = await Broadcast.countDocuments();
+    const broadcasts = await Broadcast.find()
+      .sort({ created_at: -1 }).skip(skip).limit(parseInt(limit))
+      .populate('sent_by', 'full_name email')
+      .lean();
+
+    const ids = broadcasts.map(b => b._id);
+    const ackCounts = await User.aggregate([
+      { $match: { 'admin_messages.broadcast_id': { $in: ids } } },
+      { $unwind: '$admin_messages' },
+      { $match: { 'admin_messages.broadcast_id': { $in: ids }, 'admin_messages.acknowledged': true } },
+      { $group: { _id: '$admin_messages.broadcast_id', count: { $sum: 1 } } },
+    ]);
+    const ackMap = Object.fromEntries(ackCounts.map(a => [String(a._id), a.count]));
+
+    res.json({
+      broadcasts: broadcasts.map(b => ({
+        ...b, id: b._id,
+        acknowledged_count: ackMap[String(b._id)] || 0,
+      })),
+      total, page: parseInt(page), pages: Math.ceil(total / parseInt(limit)),
+    });
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 

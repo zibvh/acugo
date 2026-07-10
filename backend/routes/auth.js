@@ -350,20 +350,45 @@ router.put('/change-password', authMiddleware, async (req, res) => {
 });
 
 // ─── GET /api/auth/admin-messages ────────────────────────────────────────────
-// Returns unread admin messages and marks them as read.
+// Returns unacknowledged admin messages. Does NOT mark them as read/acknowledged —
+// that only happens when the user explicitly presses the acknowledge button
+// (see POST /admin-messages/:id/ack below), so a message can't be silently
+// consumed just by the app fetching it in the background.
 router.get('/admin-messages', authMiddleware, async (req, res) => {
   try {
     const user = await User.findById(req.user.id).select('admin_messages');
     if (!user) return res.status(404).json({ error: 'User not found' });
 
-    const unread = (user.admin_messages || []).filter(m => !m.read);
+    const unacknowledged = (user.admin_messages || []).filter(m => !m.acknowledged);
 
-    if (unread.length) {
-      user.admin_messages.forEach(m => { m.read = true; });
-      await user.save();
-    }
+    res.json({
+      messages: unacknowledged.map(m => ({
+        id:      m._id,
+        title:   m.title || '',
+        content: m.content,
+        sent_at: m.sent_at,
+      })),
+    });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
 
-    res.json({ messages: unread.map(m => ({ content: m.content, sent_at: m.sent_at })) });
+// ─── POST /api/auth/admin-messages/:id/ack ───────────────────────────────────
+// Marks a single admin message as acknowledged. Called only when the user
+// presses the "I've read this" button on the popup.
+router.post('/admin-messages/:id/ack', authMiddleware, async (req, res) => {
+  try {
+    const user = await User.findById(req.user.id).select('admin_messages');
+    if (!user) return res.status(404).json({ error: 'User not found' });
+
+    const msg = user.admin_messages.id(req.params.id);
+    if (!msg) return res.status(404).json({ error: 'Message not found' });
+
+    msg.acknowledged = true;
+    msg.acknowledged_at = new Date();
+    msg.read = true;
+    await user.save();
+
+    res.json({ success: true });
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 

@@ -19,7 +19,15 @@ const userSchema = new mongoose.Schema({
   rating_count:    { type: Number, default: 0 },
   is_verified:     { type: Boolean, default: false },
   listing_credits:  { type: Number, default: 1 },
-  admin_messages:   { type: [{ content: String, sent_at: Date, read: { type: Boolean, default: false } }], default: [] },
+  admin_messages:   { type: [{
+    title:           { type: String, default: '' },
+    content:         String,
+    sent_at:         Date,
+    read:            { type: Boolean, default: false },      // kept for backward compatibility
+    acknowledged:    { type: Boolean, default: false },
+    acknowledged_at: { type: Date, default: null },
+    broadcast_id:    { type: mongoose.Schema.Types.ObjectId, ref: 'Broadcast', default: null },
+  }], default: [] },
   used_payment_refs: { type: [String], default: [] },
   // Registration profile (filled after signup)
   registration_complete: { type: Boolean, default: false },
@@ -140,6 +148,19 @@ const orderSchema = new mongoose.Schema({
 orderSchema.index({ buyer_id: 1 });
 orderSchema.index({ seller_id: 1 });
 
+// ── Admin broadcast messages ──
+// Records each "send to selected users" action from the admin panel, for
+// audit/history purposes. The actual delivery to each user lives in that
+// user's own `admin_messages` array (see userSchema above).
+const broadcastSchema = new mongoose.Schema({
+  title:            { type: String, default: '' },
+  content:          { type: String, required: true },
+  filters:          { type: mongoose.Schema.Types.Mixed, default: {} }, // filters used to build the recipient list, kept for audit history
+  recipient_ids:    { type: [mongoose.Schema.Types.ObjectId], ref: 'User', default: [] },
+  recipient_count:  { type: Number, default: 0 },
+  sent_by:          { type: mongoose.Schema.Types.ObjectId, ref: 'User', default: null },
+}, { timestamps: { createdAt: 'created_at', updatedAt: 'updated_at' } });
+
 const User               = mongoose.model('User',               userSchema);
 const Listing            = mongoose.model('Listing',            listingSchema);
 const Waitlist           = mongoose.model('Waitlist',           waitlistSchema);
@@ -148,6 +169,7 @@ const Conversation       = mongoose.model('Conversation',       conversationSche
 const Message            = mongoose.model('Message',            messageSchema);
 const ConversationReport = mongoose.model('ConversationReport', conversationReportSchema);
 const Order              = mongoose.model('Order',              orderSchema);
+const Broadcast          = mongoose.model('Broadcast',          broadcastSchema);
 
 async function connectDb() {
   const uri = process.env.MONGODB_URI;
@@ -156,4 +178,4 @@ async function connectDb() {
   console.log('  MongoDB connected:', mongoose.connection.host);
 }
 
-module.exports = { connectDb, User, Listing, Waitlist, SavedListing, Conversation, Message, ConversationReport, Order };
+module.exports = { connectDb, User, Listing, Waitlist, SavedListing, Conversation, Message, ConversationReport, Order, Broadcast };

@@ -325,6 +325,50 @@ body {
   cursor: pointer;
 }
 
+/* ── Broadcast tab ── */
+.bcast-layout { display: grid; grid-template-columns: 1fr 340px; gap: 20px; align-items: start; }
+.bcast-main { min-width: 0; }
+.bcast-select-bar {
+  display: flex; align-items: center; gap: 16px; flex-wrap: wrap;
+  margin-bottom: 10px; font-size: 13px; color: var(--ink-2);
+}
+.bcast-check-label { display: flex; align-items: center; gap: 6px; cursor: pointer; user-select: none; }
+.bcast-check-label input, .bcast-row-check { width: 16px; height: 16px; accent-color: var(--accent); cursor: pointer; }
+.link-btn {
+  background: none; border: none; padding: 0; color: var(--accent); font-weight: 600;
+  font-size: 13px; cursor: pointer; font-family: var(--font-body); text-decoration: underline;
+}
+.link-btn.active { color: var(--ink); }
+.bcast-selected-count {
+  margin-left: auto; font-weight: 700; color: var(--ink);
+  background: var(--bg); border: 1.5px solid var(--border); border-radius: 20px; padding: 4px 12px;
+}
+.bcast-compose {
+  background: var(--surface); border: 1.5px solid var(--border); border-radius: var(--radius-lg, 14px);
+  padding: 18px; position: sticky; top: 16px;
+}
+.bcast-compose-title { font-size: 14px; font-weight: 700; margin-bottom: 12px; }
+.bcast-field-label { display: block; font-size: 12px; font-weight: 600; color: var(--ink-2); margin: 10px 0 5px; }
+.bcast-input, .bcast-textarea {
+  width: 100%; padding: 9px 12px; border: 1.5px solid var(--border); border-radius: 10px;
+  font-family: var(--font-body); font-size: 13px; background: var(--bg); color: var(--ink);
+  outline: none; resize: vertical; box-sizing: border-box;
+}
+.bcast-input:focus, .bcast-textarea:focus { border-color: var(--ink); }
+.bcast-send-btn { width: 100%; margin-top: 14px; }
+.bcast-hint { font-size: 11.5px; color: var(--ink-3); margin-top: 8px; line-height: 1.5; }
+.bcast-history { margin-top: 22px; padding-top: 16px; border-top: 1.5px solid var(--border); }
+.bcast-history-item { padding: 10px 0; border-bottom: 1px solid var(--border); }
+.bcast-history-item:last-child { border-bottom: none; }
+.bcast-history-top { display: flex; justify-content: space-between; gap: 8px; font-size: 12.5px; font-weight: 700; }
+.bcast-history-date { font-weight: 500; color: var(--ink-3); white-space: nowrap; }
+.bcast-history-body { font-size: 12.5px; color: var(--ink-2); margin: 4px 0; line-height: 1.5; }
+.bcast-history-meta { font-size: 11px; color: var(--ink-3); }
+@media (max-width: 960px) {
+  .bcast-layout { grid-template-columns: 1fr; }
+  .bcast-compose { position: static; }
+}
+
 /* ── Action buttons ── */
 .action-btns { display: flex; gap: 5px; flex-wrap: wrap; align-items: center; }
 .action-btn {
@@ -652,6 +696,10 @@ body {
     </button>
 
     <div class="admin-nav-section">Moderation</div>
+    <button class="admin-nav-item" data-tab="broadcast">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 11l18-5v12L3 14v-3z"/><path d="M11.6 16.8a3 3 0 1 1-5.8-1.6"/></svg>
+      Broadcast
+    </button>
     <button class="admin-nav-item" data-tab="messages">
       <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
       Reports
@@ -748,7 +796,7 @@ api.patch = (path, body) => api.request('PATCH', path, body, true);
 function adminLogout() { adminAuth.clear(); window.location.replace('admin-login.html'); }
 
 // ── Tab routing ─────────────────────────────────────────────────────────────
-const TABS = { overview: 'Overview', users: 'Users', listings: 'Listings', messages: 'Reports', flagged: 'AI Flagged' };
+const TABS = { overview: 'Overview', users: 'Users', listings: 'Listings', broadcast: 'Broadcast', messages: 'Reports', flagged: 'AI Flagged' };
 let currentTab = 'overview';
 
 document.querySelectorAll('.admin-nav-item[data-tab]').forEach(btn => {
@@ -788,6 +836,7 @@ function switchTab(tab) {
   if (tab === 'overview')  renderOverview();
   if (tab === 'users')     renderUsers();
   if (tab === 'listings')  renderListings();
+  if (tab === 'broadcast') renderBroadcast();
   if (tab === 'messages')  renderMessages();
   if (tab === 'flagged')   renderFlagged();
 }
@@ -1225,6 +1274,288 @@ function sendAdminMessage(id, name) {
       } catch(e) { toast(e.message, 'error'); }
     },
   });
+}
+
+// ══════════════════════════════════════════════════════════════════════════════
+// BROADCAST — send a message to a selected set of users
+// ══════════════════════════════════════════════════════════════════════════════
+let broadcastState = { q: '', role: 'all', status: 'all', verified: 'all', university: 'all', page: 1 };
+let broadcastSelected = new Set();   // explicitly-checked user ids (persists across pages)
+let broadcastSelectAllMatching = false; // true once admin picks "select all N matching filters"
+let broadcastMatchingCount = 0;
+
+async function renderBroadcast() {
+  broadcastSelected = new Set();
+  broadcastSelectAllMatching = false;
+  const c = document.getElementById('admin-content');
+  c.innerHTML = `
+    <div class="bcast-layout">
+      <div class="bcast-main">
+        <div class="admin-toolbar">
+          <input class="admin-search" id="bcast-search" placeholder="Search name or email…" value="${escHtml(broadcastState.q)}">
+          <select class="filter-select" id="bcast-role-filter">
+            <option value="all">All roles</option>
+            <option value="buyer">Buyers</option>
+            <option value="seller">Sellers</option>
+          </select>
+          <select class="filter-select" id="bcast-status-filter">
+            <option value="all">All statuses</option>
+            <option value="active">Active</option>
+            <option value="warned">Warned</option>
+            <option value="suspended">Suspended</option>
+          </select>
+          <select class="filter-select" id="bcast-verified-filter">
+            <option value="all">Verified: all</option>
+            <option value="yes">Verified only</option>
+            <option value="no">Unverified only</option>
+          </select>
+          <select class="filter-select" id="bcast-university-filter">
+            <option value="all">All universities</option>
+          </select>
+        </div>
+
+        <div class="bcast-select-bar">
+          <label class="bcast-check-label">
+            <input type="checkbox" id="bcast-select-page"> Select all on this page
+          </label>
+          <button class="link-btn" id="bcast-select-all-matching">Select all <span id="bcast-matching-count">…</span> matching filters</button>
+          <span class="bcast-selected-count" id="bcast-selected-count">0 selected</span>
+        </div>
+
+        <div class="admin-table-wrap" id="bcast-table-wrap">
+          <table class="admin-table">
+            <thead><tr>
+              <th style="width:36px"></th><th>Name</th><th>Email</th><th>Role</th><th>Status</th><th>Verified</th>
+            </tr></thead>
+            <tbody id="bcast-tbody">${skeletonRows(6)}</tbody>
+          </table>
+          <div id="bcast-pagination"></div>
+        </div>
+      </div>
+
+      <div class="bcast-compose">
+        <div class="bcast-compose-title">Compose message</div>
+        <label class="bcast-field-label">Title <span style="font-weight:400;color:var(--ink-3)">(optional)</span></label>
+        <input class="bcast-input" id="bcast-title" placeholder="e.g. Scheduled maintenance" maxlength="120">
+        <label class="bcast-field-label">Message</label>
+        <textarea class="bcast-textarea" id="bcast-message" rows="6" placeholder="Write the message users will see as a popup…" maxlength="2000"></textarea>
+        <button class="btn btn-primary bcast-send-btn" id="bcast-send-btn">Send message</button>
+        <div class="bcast-hint">Recipients will see this as a popup the next time they open or refresh the app, with a button to confirm they've read it.</div>
+
+        <div class="bcast-history">
+          <div class="bcast-compose-title" style="margin-top:4px;">Recent broadcasts</div>
+          <div id="bcast-history-list"><div class="admin-empty" style="padding:16px 0;">Loading…</div></div>
+        </div>
+      </div>
+    </div>`;
+
+  // Filters
+  let searchTimer;
+  document.getElementById('bcast-search').addEventListener('input', e => {
+    broadcastState.q = e.target.value;
+    clearTimeout(searchTimer);
+    searchTimer = setTimeout(() => fetchBroadcastRecipients(1), 350);
+  });
+  document.getElementById('bcast-role-filter').addEventListener('change', e => { broadcastState.role = e.target.value; fetchBroadcastRecipients(1); });
+  document.getElementById('bcast-status-filter').addEventListener('change', e => { broadcastState.status = e.target.value; fetchBroadcastRecipients(1); });
+  document.getElementById('bcast-verified-filter').addEventListener('change', e => { broadcastState.verified = e.target.value; fetchBroadcastRecipients(1); });
+  document.getElementById('bcast-university-filter').addEventListener('change', e => { broadcastState.university = e.target.value; fetchBroadcastRecipients(1); });
+
+  // Select-all-on-page checkbox
+  document.getElementById('bcast-select-page').addEventListener('change', e => {
+    broadcastSelectAllMatching = false;
+    document.querySelectorAll('#bcast-tbody .bcast-row-check').forEach(cb => {
+      cb.checked = e.target.checked;
+      cb.disabled = false;
+      if (e.target.checked) broadcastSelected.add(cb.dataset.id);
+      else broadcastSelected.delete(cb.dataset.id);
+    });
+    updateBroadcastSelectedCount();
+  });
+
+  // Select-all-matching-filters
+  document.getElementById('bcast-select-all-matching').addEventListener('click', () => {
+    broadcastSelectAllMatching = !broadcastSelectAllMatching;
+    broadcastSelected = new Set();
+    document.querySelectorAll('#bcast-tbody .bcast-row-check').forEach(cb => {
+      cb.checked = broadcastSelectAllMatching;
+      cb.disabled = broadcastSelectAllMatching;
+    });
+    document.getElementById('bcast-select-page').checked = broadcastSelectAllMatching;
+    document.getElementById('bcast-select-page').disabled = broadcastSelectAllMatching;
+    document.getElementById('bcast-select-all-matching').classList.toggle('active', broadcastSelectAllMatching);
+    updateBroadcastSelectedCount();
+  });
+
+  // Row checkboxes (delegated — survives tbody re-render on pagination)
+  document.getElementById('bcast-table-wrap').addEventListener('change', e => {
+    const cb = e.target.closest('.bcast-row-check');
+    if (!cb) return;
+    if (cb.checked) broadcastSelected.add(cb.dataset.id);
+    else broadcastSelected.delete(cb.dataset.id);
+    updateBroadcastSelectedCount();
+  });
+
+  document.getElementById('bcast-send-btn').addEventListener('click', sendBroadcast);
+
+  loadBroadcastUniversities();
+  fetchBroadcastRecipients(1);
+  fetchBroadcastHistory();
+}
+
+async function loadBroadcastUniversities() {
+  try {
+    const { universities } = await api.get('/admin/broadcast/universities');
+    const sel = document.getElementById('bcast-university-filter');
+    if (!sel) return;
+    universities.forEach(u => {
+      const opt = document.createElement('option');
+      opt.value = u; opt.textContent = u;
+      sel.appendChild(opt);
+    });
+  } catch {}
+}
+
+function broadcastFilterParams() {
+  const { q, role, status, verified, university } = broadcastState;
+  const params = new URLSearchParams();
+  if (q) params.set('q', q);
+  if (role !== 'all') params.set('role', role);
+  if (status !== 'all') params.set('status', status);
+  if (verified !== 'all') params.set('verified', verified);
+  if (university !== 'all') params.set('university', university);
+  return params;
+}
+
+async function fetchBroadcastRecipients(page) {
+  broadcastState.page = page;
+  const tbody = document.getElementById('bcast-tbody');
+  const pgDiv = document.getElementById('bcast-pagination');
+  if (!tbody) return;
+  tbody.innerHTML = skeletonRows(6);
+  try {
+    const params = broadcastFilterParams();
+    params.set('page', page); params.set('limit', 20);
+    const data = await api.get(`/admin/broadcast/recipients?${params}`);
+
+    // Refresh the "select all matching" count whenever filters change
+    fetchBroadcastMatchingCount();
+
+    if (!data.users.length) {
+      tbody.innerHTML = `<tr><td colspan="6" style="text-align:center;color:var(--ink-3);padding:32px">No users found</td></tr>`;
+      pgDiv.innerHTML = ''; return;
+    }
+
+    tbody.innerHTML = data.users.map(u => `
+      <tr>
+        <td><input type="checkbox" class="bcast-row-check" data-id="${u.id}"
+          ${broadcastSelectAllMatching || broadcastSelected.has(String(u.id)) ? 'checked' : ''}
+          ${broadcastSelectAllMatching ? 'disabled' : ''}></td>
+        <td class="name-cell">${escHtml(u.full_name)}</td>
+        <td class="mono">${escHtml(u.email)}</td>
+        <td>${roleBadge(u.role)}</td>
+        <td>${statusBadge(u.account_status)}</td>
+        <td>${u.is_verified ? '✅' : '—'}</td>
+      </tr>`).join('');
+
+    pgDiv.innerHTML = paginationHTML(data.page, data.pages, data.total);
+    bindPagination('bcast-pagination', fetchBroadcastRecipients);
+
+    // Reflect "select all on page" checkbox state for the freshly-rendered page
+    const pageCb = document.getElementById('bcast-select-page');
+    if (pageCb) {
+      const rows = [...document.querySelectorAll('#bcast-tbody .bcast-row-check')];
+      pageCb.checked = broadcastSelectAllMatching || (rows.length > 0 && rows.every(cb => broadcastSelected.has(cb.dataset.id)));
+      pageCb.disabled = broadcastSelectAllMatching;
+    }
+    updateBroadcastSelectedCount();
+  } catch(e) {
+    if (tbody) tbody.innerHTML = `<tr><td colspan="6" style="color:var(--red,#e53e3e);padding:20px">${e.message}</td></tr>`;
+  }
+}
+window.fetchBroadcastRecipients = fetchBroadcastRecipients;
+
+async function fetchBroadcastMatchingCount() {
+  try {
+    const params = broadcastFilterParams();
+    const data = await api.get(`/admin/broadcast/recipients/ids?${params}`);
+    broadcastMatchingCount = data.count;
+    const el = document.getElementById('bcast-matching-count');
+    if (el) el.textContent = data.count;
+  } catch {}
+}
+
+function updateBroadcastSelectedCount() {
+  const el = document.getElementById('bcast-selected-count');
+  if (!el) return;
+  const n = broadcastSelectAllMatching ? broadcastMatchingCount : broadcastSelected.size;
+  el.textContent = `${n} selected`;
+}
+
+async function sendBroadcast() {
+  const title = document.getElementById('bcast-title').value.trim();
+  const message = document.getElementById('bcast-message').value.trim();
+  if (!message) { toast('Write a message first', 'error'); return; }
+
+  let recipientCount = broadcastSelectAllMatching ? broadcastMatchingCount : broadcastSelected.size;
+  if (!recipientCount) { toast('Select at least one recipient', 'error'); return; }
+
+  showModal({
+    title: 'Send broadcast message?',
+    sub: `This will be sent to ${recipientCount} user${recipientCount === 1 ? '' : 's'} and shown as a popup they must acknowledge.`,
+    confirmLabel: 'Send message',
+    confirmClass: 'btn-primary',
+    noReason: true,
+    onConfirm: async () => {
+      const btn = document.getElementById('bcast-send-btn');
+      if (btn) { btn.disabled = true; btn.textContent = 'Sending…'; }
+      try {
+        let user_ids;
+        if (broadcastSelectAllMatching) {
+          const params = broadcastFilterParams();
+          const data = await api.get(`/admin/broadcast/recipients/ids?${params}`);
+          user_ids = data.ids;
+        } else {
+          user_ids = [...broadcastSelected];
+        }
+        const res = await api.post('/admin/broadcast', {
+          user_ids, title, message,
+          filters: broadcastSelectAllMatching ? { ...broadcastState } : undefined,
+        });
+        toast(`Message sent to ${res.recipient_count} user${res.recipient_count === 1 ? '' : 's'}.`, 'success');
+        document.getElementById('bcast-title').value = '';
+        document.getElementById('bcast-message').value = '';
+        broadcastSelected = new Set();
+        broadcastSelectAllMatching = false;
+        fetchBroadcastRecipients(broadcastState.page);
+        fetchBroadcastHistory();
+      } catch(e) { toast(e.message, 'error'); }
+      finally { if (btn) { btn.disabled = false; btn.textContent = 'Send message'; } }
+    },
+  });
+}
+
+async function fetchBroadcastHistory() {
+  const el = document.getElementById('bcast-history-list');
+  if (!el) return;
+  try {
+    const data = await api.get('/admin/broadcasts?limit=8');
+    if (!data.broadcasts.length) {
+      el.innerHTML = `<div class="admin-empty" style="padding:16px 0;">No broadcasts sent yet</div>`;
+      return;
+    }
+    el.innerHTML = data.broadcasts.map(b => `
+      <div class="bcast-history-item">
+        <div class="bcast-history-top">
+          <span class="bcast-history-title">${escHtml(b.title || 'Untitled message')}</span>
+          <span class="bcast-history-date">${fmtTime(b.created_at)}</span>
+        </div>
+        <div class="bcast-history-body">${escHtml((b.content || '').slice(0, 140))}${(b.content || '').length > 140 ? '…' : ''}</div>
+        <div class="bcast-history-meta">${b.recipient_count} recipient${b.recipient_count === 1 ? '' : 's'} · ${b.acknowledged_count} read it · sent by ${escHtml(b.sent_by?.full_name || 'admin')}</div>
+      </div>`).join('');
+  } catch(e) {
+    el.innerHTML = `<div class="admin-empty" style="padding:16px 0;color:var(--red,#e53e3e)">${e.message}</div>`;
+  }
 }
 
 // ══════════════════════════════════════════════════════════════════════════════
